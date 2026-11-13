@@ -19,3 +19,4 @@ android/app/debug/
 *.iml
 # Test artifacts
 tests/screenshots/
+*.tsbuildinfo

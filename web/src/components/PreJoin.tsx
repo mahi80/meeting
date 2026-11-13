@@ -33,62 +33,124 @@ type Props = {
 const inputClass =
   'w-full rounded-lg border border-ink-600 bg-ink-950/60 px-3.5 py-2.5 text-sm text-mist-100 placeholder:text-mist-500 transition focus:border-zoom/70 focus:ring-2 focus:ring-zoom/20';
 
+const stopTracks = (stream: MediaStream | null) =>
+  stream?.getTracks().forEach((track) => track.stop());
+
+function cameraErrorMessage(err: DOMException) {
+  switch (err.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Camera access is blocked. Allow the camera in the address bar (lock icon), then press the camera button again.';
+    case 'NotFoundError':
+      return 'No camera was found on this device.';
+    case 'NotReadableError':
+      return 'The camera is in use by another app. Close it and press the camera button again.';
+    case 'OverconstrainedError':
+      return 'The camera does not support the requested settings.';
+    default:
+      return 'The camera could not be started.';
+  }
+}
+
+function micErrorMessage(err: DOMException) {
+  switch (err.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Microphone access is blocked. Allow the microphone in the address bar (lock icon), then press the mic button again.';
+    case 'NotFoundError':
+      return 'No microphone was found on this device.';
+    case 'NotReadableError':
+      return 'The microphone is in use by another app.';
+    default:
+      return 'The microphone could not be started.';
+  }
+}
+
 function usePreview(micOn: boolean, camOn: boolean) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
   const [level, setLevel] = useState(0);
-  const [error, setError] = useState('');
+  const [camError, setCamError] = useState('');
+  const [micError, setMicError] = useState('');
 
+  // Audio and video are requested separately so a blocked camera does not
+  // knock out the microphone (and vice versa).
   useEffect(() => {
-    let cancelled = false;
-    let active: MediaStream | null = null;
-    setError('');
-    if (!micOn && !camOn) {
-      setStream(null);
+    if (!micOn) {
+      setAudioStream(null);
+      setMicError('');
       return;
     }
-
+    let cancelled = false;
+    let active: MediaStream | null = null;
+    setMicError('');
     navigator.mediaDevices
-      .getUserMedia({
-        audio: micOn,
-        video: camOn
-          ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-          : false,
-      })
+      .getUserMedia({ audio: true, video: false })
       .then((media) => {
         if (cancelled) {
-          media.getTracks().forEach((track) => track.stop());
+          stopTracks(media);
           return;
         }
         active = media;
-        setStream(media);
+        setAudioStream(media);
       })
       .catch((err: DOMException) => {
         if (cancelled) return;
-        setStream(null);
-        setError(
-          err.name === 'NotAllowedError'
-            ? 'Camera or microphone permission was denied'
-            : 'Camera or microphone is unavailable',
-        );
+        setAudioStream(null);
+        setMicError(micErrorMessage(err));
       });
 
     return () => {
       cancelled = true;
-      active?.getTracks().forEach((track) => track.stop());
+      stopTracks(active);
     };
-  }, [micOn, camOn]);
+  }, [micOn]);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
-  }, [stream]);
+    if (!camOn) {
+      setVideoStream(null);
+      setCamError('');
+      return;
+    }
+    let cancelled = false;
+    let active: MediaStream | null = null;
+    setCamError('');
+    navigator.mediaDevices
+      .getUserMedia({
+        audio: false,
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      })
+      .then((media) => {
+        if (cancelled) {
+          stopTracks(media);
+          return;
+        }
+        active = media;
+        setVideoStream(media);
+      })
+      .catch((err: DOMException) => {
+        if (cancelled) return;
+        setVideoStream(null);
+        setCamError(cameraErrorMessage(err));
+      });
+
+    return () => {
+      cancelled = true;
+      stopTracks(active);
+    };
+  }, [camOn]);
 
   useEffect(() => {
-    if (!stream || !micOn) {
+    if (videoRef.current) videoRef.current.srcObject = videoStream;
+  }, [videoStream]);
+
+  useEffect(() => {
+    if (!audioStream || !micOn) {
       setLevel(0);
       return;
     }
-    const audioTracks = stream.getAudioTracks();
+    const audioTracks = audioStream.getAudioTracks();
     if (audioTracks.length === 0) return;
 
     const AudioCtor =
@@ -117,9 +179,9 @@ function usePreview(micOn: boolean, camOn: boolean) {
       cancelAnimationFrame(frame);
       void ctx.close();
     };
-  }, [stream, micOn]);
+  }, [audioStream, micOn]);
 
-  return { videoRef, level, error, hasStream: Boolean(stream) };
+  return { videoRef, level, camError, micError, hasVideo: Boolean(videoStream) };
 }
 
 export function PreJoin({
@@ -137,14 +199,7 @@ export function PreJoin({
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [localError, setLocalError] = useState('');
-  const { videoRef, level, error: previewError } = usePreview(micOn, camOn);
-
-  useEffect(() => {
-    if (previewError) {
-      setMicOn(false);
-      setCamOn(false);
-    }
-  }, [previewError]);
+  const { videoRef, level, camError, micError, hasVideo } = usePreview(micOn, camOn);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -191,25 +246,26 @@ export function PreJoin({
               muted
               className={cn(
                 'h-full w-full -scale-x-100 object-cover',
-                (!camOn || previewError) && 'hidden',
+                (!camOn || !hasVideo) && 'hidden',
               )}
             />
 
-            {(!camOn || previewError) && (
+            {(!camOn || !hasVideo) && (
               <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_50%_35%,#243043,#11151b_70%)]">
                 <span className="grid h-24 w-24 place-items-center rounded-full bg-ink-700 text-3xl font-semibold text-mist-200">
                   {initials(name || 'You')}
                 </span>
-                <span className="flex items-center gap-1.5 text-xs text-mist-400">
-                  <CameraOff size={13} />
-                  {previewError || (camOn ? 'Camera unavailable' : 'Camera is off')}
+                <span className="max-w-[22rem] px-4 text-center text-xs leading-relaxed text-mist-400">
+                  <CameraOff size={13} className="mr-1.5 inline" />
+                  {camError || (camOn ? 'Starting camera…' : 'Camera is off')}
                 </span>
               </div>
             )}
 
             <div className="absolute left-3 top-3 flex items-center gap-2">
               <span className="flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1 text-[10px] font-medium text-mist-200 backdrop-blur">
-                <span className="h-1.5 w-1.5 rounded-full bg-ok" /> Camera preview
+                <span className={cn('h-1.5 w-1.5 rounded-full', hasVideo ? 'bg-ok' : 'bg-mist-500')} />
+                {hasVideo ? 'Camera preview' : 'Camera off'}
               </span>
               {isHost && (
                 <span className="flex items-center gap-1.5 rounded-md bg-amber-400/15 px-2 py-1 text-[10px] font-semibold text-amber-300 backdrop-blur">
@@ -273,6 +329,12 @@ export function PreJoin({
                 ? 'You control the waiting room and can admit guests.'
                 : 'Your name is shown to everyone in the meeting.'}
             </p>
+
+            {(camError || micError) && (
+              <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+                {camError || micError}
+              </p>
+            )}
 
             <div className="mt-5 space-y-4">
               <div>
