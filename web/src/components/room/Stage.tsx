@@ -1,14 +1,27 @@
 import type { TrackReference, TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import { VideoTrack } from '@livekit/components-react';
 import { MonitorUp } from 'lucide-react';
+import type { Point, Stroke, StrokeMeta } from '../../hooks/useAnnotations';
 import type { ViewMode } from '../../lib/roomTypes';
 import { participantName } from '../../lib/participants';
 import { cn } from '../../lib/utils';
+import { AnnotationLayer } from './AnnotationLayer';
 import { VideoTile } from './VideoTile';
+
+export type AnnotationState = {
+  target: string;
+  strokes: Stroke[];
+  beginStroke: (meta: StrokeMeta) => void;
+  appendPoints: (target: string, id: string, points: Point[]) => void;
+  endStroke: (target: string, id: string) => void;
+  undoStroke: (target: string, id: string) => void;
+  clearStrokes: (target: string) => void;
+};
 
 type Props = {
   cameraTracks: TrackReferenceOrPlaceholder[];
   screenTrack: TrackReference | null;
+  annotations: AnnotationState | null;
   mode: ViewMode;
   onStopSharing: () => void;
 };
@@ -50,15 +63,28 @@ function Filmstrip({
 
 function ScreenShareStage({
   trackRef,
+  annotations,
   onStopSharing,
 }: {
   trackRef: TrackReference;
+  annotations: AnnotationState | null;
   onStopSharing: () => void;
 }) {
   const local = trackRef.participant.isLocal;
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border-2 border-ok/50 bg-black shadow-2xl shadow-black/40">
       <VideoTrack trackRef={trackRef} className="h-full w-full object-contain" />
+      {annotations && (
+        <AnnotationLayer
+          target={annotations.target}
+          strokes={annotations.strokes}
+          onBegin={annotations.beginStroke}
+          onAppend={annotations.appendPoints}
+          onEnd={annotations.endStroke}
+          onUndo={annotations.undoStroke}
+          onClear={annotations.clearStrokes}
+        />
+      )}
       <div className="absolute left-3 top-3 flex items-center gap-2 rounded-md bg-black/70 px-2.5 py-1.5 text-[11px] text-mist-200 backdrop-blur">
         <MonitorUp size={12} className="text-ok" />
         <span className="max-w-[240px] truncate">
@@ -78,13 +104,17 @@ function ScreenShareStage({
   );
 }
 
-export function Stage({ cameraTracks, screenTrack, mode, onStopSharing }: Props) {
+export function Stage({ cameraTracks, screenTrack, annotations, mode, onStopSharing }: Props) {
   if (screenTrack) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
           <div className="min-w-0 flex-1 p-2 sm:p-3">
-            <ScreenShareStage trackRef={screenTrack} onStopSharing={onStopSharing} />
+            <ScreenShareStage
+              trackRef={screenTrack}
+              annotations={annotations}
+              onStopSharing={onStopSharing}
+            />
           </div>
           <Filmstrip tracks={cameraTracks} vertical />
         </div>

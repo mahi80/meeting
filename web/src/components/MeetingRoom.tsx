@@ -16,8 +16,9 @@ import type { MeetingInfo } from '../lib/api';
 import type { Panel, Session, ViewMode } from '../lib/roomTypes';
 import { isCameraEnabled, isMicEnabled } from '../lib/participants';
 import { useChat } from '../hooks/useChat';
+import { useAnnotations } from '../hooks/useAnnotations';
 import { useWaitingRoom } from '../hooks/useWaitingRoom';
-import { Stage } from './room/Stage';
+import { Stage, type AnnotationState } from './room/Stage';
 import { TopBar } from './room/TopBar';
 import { Toolbar } from './room/Toolbar';
 import { SidePanel } from './room/SidePanel';
@@ -119,6 +120,7 @@ function RoomView({
   const camOn = isCameraEnabled(localParticipant);
 
   const { messages, send } = useChat();
+  const annotations = useAnnotations();
   const { requests, decide, offline } = useWaitingRoom(meeting.id, hostKey, isHost);
 
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -173,6 +175,10 @@ function RoomView({
   }, [localParticipant, camOn, showToast]);
 
   const handleShare = useCallback(async () => {
+    if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') {
+      showToast('This browser cannot share a screen. Use a desktop browser or the Android app.');
+      return;
+    }
     try {
       await localParticipant.setScreenShareEnabled(!sharing);
     } catch {
@@ -210,6 +216,19 @@ function RoomView({
 
   const inviteUrl = `${window.location.origin}/m/${meeting.id}${passcode ? `#p=${encodeURIComponent(passcode)}` : ''}`;
 
+  const shareIdentity = screenTrack?.participant.identity;
+  const annotationState: AnnotationState | null = shareIdentity
+    ? {
+        target: shareIdentity,
+        strokes: annotations.strokes[shareIdentity] ?? [],
+        beginStroke: annotations.beginStroke,
+        appendPoints: annotations.appendPoints,
+        endStroke: annotations.endStroke,
+        undoStroke: annotations.undoStroke,
+        clearStrokes: annotations.clearStrokes,
+      }
+    : null;
+
   return (
     <div className="flex h-full flex-col bg-room">
       <TopBar
@@ -238,6 +257,7 @@ function RoomView({
           <Stage
             cameraTracks={cameraTracks}
             screenTrack={screenTrack}
+            annotations={annotationState}
             mode={mode}
             onStopSharing={() => void handleShare()}
           />

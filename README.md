@@ -3,6 +3,7 @@
 A Zoom-style meeting app with **video, screen sharing and chat**, built on [LiveKit](https://livekit.io).
 
 - **Web app** — React + Vite, Zoom-like dark room UI: gallery/speaker views, screen-share stage with filmstrip, chat, invite dialog, passcode + waiting room.
+- **Screen-share annotation** — anyone in the call can draw on the shared screen (pen, 5 colors, eraser, undo, clear); strokes sync to every participant over the LiveKit data channel.
 - **Android app** — Kotlin + Jetpack Compose + LiveKit Android SDK: start a meeting, share the invite link over WhatsApp, admit guests, camera/mic, screen share, chat.
 - **Server** — issues LiveKit tokens, keeps passcodes and the waiting room in SQLite, serves the built web app.
 
@@ -102,6 +103,10 @@ Flow:
 5. Screen sharing uses Android's MediaProjection consent dialog and LiveKit's foreground service (Android 14+ shows a system prompt).
 
 Deep links are supported: `meeting://m/<meetingId>#p=<passcode>`.
+
+Screen sharing from the **web app** requires a desktop browser: mobile browsers (Chrome on Android, Safari on iOS) do not implement `getDisplayMedia`, so the Share button reports that screen sharing is unsupported. Use the Android app on a phone — it shares through Android's MediaProjection.
+
+Annotations are drawn in the web app; the Android client shows the shared screen without the drawing overlay.
 
 The app is intentionally cleartext-friendly for LAN development (`usesCleartextTraffic="true"`). For a public deployment, serve everything over HTTPS/WSS and remove that flag.
 
