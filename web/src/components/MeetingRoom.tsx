@@ -10,7 +10,7 @@ import {
   useTracks,
   type TrackReference,
 } from '@livekit/components-react';
-import { ConnectionState, Track, VideoPresets, type RoomOptions } from 'livekit-client';
+import { AudioPresets, ConnectionState, Track, VideoPresets, type RoomOptions } from 'livekit-client';
 import { AlertTriangle } from 'lucide-react';
 import type { MeetingInfo } from '../lib/api';
 import type { Panel, Session, ViewMode } from '../lib/roomTypes';
@@ -27,10 +27,25 @@ import { InviteDialog } from './room/InviteDialog';
 const roomOptions: RoomOptions = {
   adaptiveStream: true,
   dynacast: true,
+  // Speech, mono, with AGC: keeps voices intelligible and level-consistent on
+  // weak uplinks. voiceIsolation can over-suppress quiet/far-field speech.
+  audioCaptureDefaults: {
+    autoGainControl: true,
+    echoCancellation: true,
+    noiseSuppression: true,
+    voiceIsolation: false,
+    channelCount: 1,
+  },
   videoCaptureDefaults: { resolution: VideoPresets.h720.resolution },
   publishDefaults: {
+    audioPreset: AudioPresets.speech,
+    dtx: true,
+    red: true,
+    forceStereo: false,
     simulcast: true,
-    screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 15 },
+    // Lower ceilings leave headroom for audio when the link is saturated.
+    videoEncoding: { maxBitrate: 1_200_000, maxFramerate: 24 },
+    screenShareEncoding: { maxBitrate: 1_500_000, maxFramerate: 15 },
   },
 };
 

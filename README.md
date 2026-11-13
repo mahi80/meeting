@@ -4,6 +4,7 @@ A Zoom-style meeting app with **video, screen sharing and chat**, built on [Live
 
 - **Web app** — React + Vite, Zoom-like dark room UI: gallery/speaker views, screen-share stage with filmstrip, chat, invite dialog, passcode + waiting room.
 - **Screen-share annotation** — anyone in the call can draw on the shared screen (pen, 5 colors, eraser, undo, clear); strokes sync to every participant over the LiveKit data channel.
+- **Weak-network audio** — microphone is published as mono speech (24 kbps, DTX + RED, AGC); camera and screen-share bitrates are capped so audio keeps priority on slow WiFi.
 - **Android app** — Kotlin + Jetpack Compose + LiveKit Android SDK: start a meeting, share the invite link over WhatsApp, admit guests, camera/mic, screen share, chat.
 - **Server** — issues LiveKit tokens, keeps passcodes and the waiting room in SQLite, serves the built web app.
 
