@@ -21,6 +21,7 @@ import {
   type MeetingRow,
 } from './db.js';
 import { createToken, ensureRoom } from './livekit.js';
+import { registerFileRoutes } from './files.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -262,6 +263,8 @@ app.post(
   }),
 );
 
+registerFileRoutes(app);
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(__dirname, '../../web/dist');
 if (fs.existsSync(webDist)) {
@@ -277,6 +280,11 @@ app.use((req, res) => {
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  const status = (err as { status?: number; statusCode?: number }).status ?? 500;
+  if (status === 413) {
+    res.status(413).json({ error: 'payload_too_large' });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: 'server_error' });
 });

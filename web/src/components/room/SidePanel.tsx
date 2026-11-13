@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Check, Crown, Link2, Lock, MessageSquare, Mic, MicOff, Send, ShieldCheck, UserRound, Users, Video, VideoOff, X } from 'lucide-react';
+import {
+  Check,
+  Crown,
+  Download,
+  FileText,
+  Link2,
+  Lock,
+  MessageSquare,
+  Mic,
+  MicOff,
+  Paperclip,
+  Send,
+  ShieldCheck,
+  UserRound,
+  Users,
+  Video,
+  VideoOff,
+  X,
+} from 'lucide-react';
 import type { Participant } from 'livekit-client';
 import type { ChatMessage } from '../../hooks/useChat';
 import type { WaitingRequest } from '../../lib/api';
@@ -11,7 +29,7 @@ import {
   participantName,
 } from '../../lib/participants';
 import type { Panel } from '../../lib/roomTypes';
-import { cn, copyText, formatTime, initials } from '../../lib/utils';
+import { cn, copyText, formatBytes, formatTime, initials } from '../../lib/utils';
 
 type SidePanelProps = {
   panel: Panel;
@@ -27,6 +45,7 @@ type SidePanelProps = {
   onTab: (panel: Panel) => void;
   onClose: () => void;
   onSend: (text: string) => Promise<void>;
+  onSendFile: (file: File, caption: string, onProgress: (fraction: number) => void) => Promise<void>;
   onDecide: (requestId: string, action: 'approve' | 'deny') => void;
   onInvite: () => void;
   showToast: (message: string) => void;
@@ -83,13 +102,19 @@ function Avatar({ name, size = 'normal' }: { name: string; size?: 'normal' | 'sm
 function ChatPanel({
   messages,
   onSend,
+  onSendFile,
+  showToast,
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => Promise<void>;
+  onSendFile: (file: File, caption: string, onProgress: (fraction: number) => void) => Promise<void>;
+  showToast: (message: string) => void;
 }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [upload, setUpload] = useState<{ name: string; percent: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -104,6 +129,21 @@ function ChatPanel({
       setText('');
     } finally {
       setSending(false);
+    }
+  }
+
+  async function submitFile(file: File) {
+    if (upload) return;
+    setUpload({ name: file.name, percent: 0 });
+    try {
+      await onSendFile(file, text.trim(), (fraction) =>
+        setUpload({ name: file.name, percent: Math.round(fraction * 100) }),
+      );
+      setText('');
+    } catch {
+      showToast('Could not upload the file');
+    } finally {
+      setUpload(null);
     }
   }
 
@@ -122,7 +162,7 @@ function ChatPanel({
             </span>
             <p className="mt-3 text-sm font-medium text-mist-300">No messages yet</p>
             <p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-mist-500">
-              Messages are visible to everyone in the meeting and are not saved after you leave.
+              Messages and files are visible to everyone in the meeting and are not saved after you leave.
             </p>
           </div>
         ) : (
@@ -137,9 +177,31 @@ function ChatPanel({
                     </span>
                     <span className="shrink-0 text-[9px] text-mist-500">{formatTime(message.ts)}</span>
                   </div>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-mist-200">
-                    {message.text}
-                  </p>
+                  {message.text && (
+                    <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-mist-200">
+                      {message.text}
+                    </p>
+                  )}
+                  {message.file && (
+                    <a
+                      href={message.file.url}
+                      download={message.file.name}
+                      className="mt-1.5 flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-950/60 px-2.5 py-2 transition hover:border-zoom/50 hover:bg-ink-850"
+                    >
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-zoom/15 text-zoom">
+                        <FileText size={15} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] font-medium text-mist-100">
+                          {message.file.name}
+                        </span>
+                        <span className="block text-[10px] text-mist-500">
+                          {formatBytes(message.file.size)}
+                        </span>
+                      </span>
+                      <Download size={14} className="shrink-0 text-mist-400" />
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
@@ -148,8 +210,44 @@ function ChatPanel({
         )}
       </div>
 
+      {upload && (
+        <div className="shrink-0 px-3 pt-2">
+          <div className="flex items-center gap-1.5 text-[10px] text-mist-400">
+            <Paperclip size={11} />
+            <span className="truncate">{upload.name}</span>
+            <span className="ml-auto tabular-nums">{upload.percent}%</span>
+          </div>
+          <div className="mt-1 h-1 overflow-hidden rounded-full bg-ink-700">
+            <div
+              className="h-full rounded-full bg-zoom transition-[width]"
+              style={{ width: `${upload.percent}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="shrink-0 border-t border-ink-700 p-3">
         <div className="flex items-end gap-2 rounded-lg border border-ink-600 bg-ink-950/60 p-1.5 transition focus-within:border-zoom/60">
+          <input
+            ref={fileInput}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void submitFile(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={Boolean(upload)}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-mist-400 transition hover:bg-white/10 hover:text-mist-100 disabled:opacity-40"
+            title="Send a file"
+            aria-label="Send a file"
+          >
+            <Paperclip size={15} />
+          </button>
           <textarea
             rows={1}
             value={text}
@@ -337,6 +435,7 @@ export function SidePanel({
   onTab,
   onClose,
   onSend,
+  onSendFile,
   onDecide,
   onInvite,
   showToast,
@@ -371,7 +470,12 @@ export function SidePanel({
       </div>
 
       {panel === 'chat' ? (
-        <ChatPanel messages={messages} onSend={onSend} />
+        <ChatPanel
+          messages={messages}
+          onSend={onSend}
+          onSendFile={onSendFile}
+          showToast={showToast}
+        />
       ) : (
         <PeoplePanel
           participants={participants}

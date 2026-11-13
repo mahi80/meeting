@@ -34,6 +34,14 @@ export type HostSession = {
   title: string;
 };
 
+export type SharedFile = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+};
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -109,5 +117,48 @@ export function getHostSession(meetingId: string, hostKey: string, name: string)
   return api<HostSession>(
     `/api/meetings/${encodeURIComponent(meetingId)}/host-token`,
     json({ name }, { 'x-host-key': hostKey }),
+  );
+}
+
+export function initFileUpload(
+  meetingId: string,
+  token: string,
+  name: string,
+  type: string,
+) {
+  return api<{ fileId: string }>(
+    `/api/meetings/${encodeURIComponent(meetingId)}/files`,
+    json({ name, type }, { Authorization: `Bearer ${token}` }),
+  );
+}
+
+export function uploadFileChunk(
+  meetingId: string,
+  token: string,
+  fileId: string,
+  offset: number,
+  chunk: Blob,
+) {
+  return api<{ received: number }>(
+    `/api/meetings/${encodeURIComponent(meetingId)}/files/${encodeURIComponent(fileId)}/chunk`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/octet-stream',
+        'x-file-offset': String(offset),
+      },
+      body: chunk,
+    },
+  );
+}
+
+export function completeFileUpload(meetingId: string, token: string, fileId: string) {
+  return api<{ file: SharedFile }>(
+    `/api/meetings/${encodeURIComponent(meetingId)}/files/${encodeURIComponent(fileId)}/complete`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    },
   );
 }

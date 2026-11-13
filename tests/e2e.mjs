@@ -98,6 +98,25 @@ try {
   await host.screenshot({ path: `${SHOTS}08-host-chat.png` });
   await guest.screenshot({ path: `${SHOTS}09-guest-chat.png` });
 
+  step('host shares a file in chat');
+  const fileBody = 'standup notes: ship the file sharing\n';
+  await host.locator('input[type="file"]').setInputFiles({
+    name: 'standup-notes.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(fileBody),
+  });
+  await host.getByText('standup-notes.txt').waitFor({ timeout: 20000 });
+  await guest.getByText('standup-notes.txt').waitFor({ timeout: 20000 });
+  const fileHref = await host
+    .locator('a[download="standup-notes.txt"]')
+    .first()
+    .getAttribute('href');
+  const fileResponse = await host.request.get(new URL(fileHref, BASE).toString());
+  const fileShared = fileResponse.ok() && (await fileResponse.text()) === fileBody;
+  console.log('  file shared and downloadable:', fileShared);
+  await host.screenshot({ path: `${SHOTS}09a-host-file.png` });
+  await guest.screenshot({ path: `${SHOTS}09b-guest-file.png` });
+
   step('host shares screen');
   let shared = false;
   let inkHost = 0;
@@ -177,7 +196,7 @@ try {
   const annotationSynced = inkGuest > 100 && inkHost > 100;
   console.log(
     JSON.stringify(
-      { ok: true, shared, guestShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
+      { ok: true, shared, guestShared, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
       null,
       2,
     ),

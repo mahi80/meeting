@@ -21,6 +21,7 @@ export type AnnotationState = {
 type Props = {
   cameraTracks: TrackReferenceOrPlaceholder[];
   screenTrack: TrackReference | null;
+  shareWithSound: boolean;
   annotations: AnnotationState | null;
   mode: ViewMode;
   onStopSharing: () => void;
@@ -63,10 +64,12 @@ function Filmstrip({
 
 function ScreenShareStage({
   trackRef,
+  withSound,
   annotations,
   onStopSharing,
 }: {
   trackRef: TrackReference;
+  withSound: boolean;
   annotations: AnnotationState | null;
   onStopSharing: () => void;
 }) {
@@ -90,6 +93,11 @@ function ScreenShareStage({
         <span className="max-w-[240px] truncate">
           {local ? 'You are sharing your screen' : `${participantName(trackRef.participant)} is sharing`}
         </span>
+        {withSound && (
+          <span className="rounded bg-ok/15 px-1.5 py-0.5 text-[10px] font-semibold text-ok">
+            with sound
+          </span>
+        )}
         {local && (
           <button
             type="button"
@@ -104,7 +112,14 @@ function ScreenShareStage({
   );
 }
 
-export function Stage({ cameraTracks, screenTrack, annotations, mode, onStopSharing }: Props) {
+export function Stage({
+  cameraTracks,
+  screenTrack,
+  shareWithSound,
+  annotations,
+  mode,
+  onStopSharing,
+}: Props) {
   if (screenTrack) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -112,6 +127,7 @@ export function Stage({ cameraTracks, screenTrack, annotations, mode, onStopShar
           <div className="min-w-0 flex-1 p-2 sm:p-3">
             <ScreenShareStage
               trackRef={screenTrack}
+              withSound={shareWithSound}
               annotations={annotations}
               onStopSharing={onStopSharing}
             />

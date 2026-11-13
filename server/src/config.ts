@@ -25,6 +25,8 @@ export const config = {
   isProd,
   port: Number(process.env.PORT ?? 8787),
   dbFile: path.resolve(process.cwd(), process.env.DB_FILE ?? 'data/meeting.db'),
+  uploadDir: path.resolve(process.cwd(), process.env.UPLOAD_DIR ?? 'data/uploads'),
+  uploadTtlMs: 24 * 60 * 60 * 1000,
   publicUrl: process.env.PUBLIC_URL?.replace(/\/$/, ''),
   livekitUrl,
   livekitHttpUrl:

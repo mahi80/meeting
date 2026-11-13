@@ -3,7 +3,9 @@
 A Zoom-style meeting app with **video, screen sharing and chat**, built on [LiveKit](https://livekit.io).
 
 - **Web app** — React + Vite, Zoom-like dark room UI: gallery/speaker views, screen-share stage with filmstrip, chat, invite dialog, passcode + waiting room.
-- **Screen-share annotation** — anyone in the call can draw on the shared screen (pen, 5 colors, eraser, undo, clear); strokes sync to every participant over the LiveKit data channel.
+- **Screen-share annotation** — anyone in the call can draw on the shared screen (pen, 5 colors, eraser, undo, clear); strokes sync to every participant over the LiveKit data channel, including people who join late.
+- **Screen share with sound** — Chrome/Edge share computer/tab audio along with the screen (48 kbps Opus), shown as “with sound” on the share stage.
+- **File sharing in chat** — attach a file of any size; the web app uploads it to the meeting server in 8 MiB chunks (no total size cap) and posts a download card that everyone in the call can open.
 - **Weak-network audio** — microphone is published as mono speech (24 kbps, DTX + RED, AGC); camera and screen-share bitrates are capped so audio keeps priority on slow WiFi.
 - **Android app** — Kotlin + Jetpack Compose + LiveKit Android SDK: start a meeting, share the invite link over WhatsApp, admit guests, camera/mic, screen share, chat.
 - **Server** — issues LiveKit tokens, keeps passcodes and the waiting room in SQLite, serves the built web app.
@@ -107,7 +109,21 @@ Deep links are supported: `meeting://m/<meetingId>#p=<passcode>`.
 
 Screen sharing from the **web app** requires a desktop browser: mobile browsers (Chrome on Android, Safari on iOS) do not implement `getDisplayMedia`, so the Share button reports that screen sharing is unsupported. Use the Android app on a phone — it shares through Android's MediaProjection.
 
+When sharing from Chrome or Edge, the browser picker offers audio: tick **Share system audio** for an entire screen, or **Share tab audio** when sharing a tab; participants then hear the computer sound. What is offered depends on the OS and the chosen surface (Safari and Firefox cannot capture screen audio). If nobody can hear the shared sound, share a tab and tick its audio checkbox.
+
+Annotations draw on top of the shared-screen stage for everyone in the call (web clients). If someone still cannot see them, make sure they loaded the current build (hard refresh: `Ctrl+Shift+R`, or `Cmd+Shift+R` on macOS). With more than one person sharing at once, the app shows one share — if the ink was drawn on a different share, switch to that one.
+
 Annotations are drawn in the web app; the Android client shows the shared screen without the drawing overlay.
+
+### File sharing
+
+Attach files with the paperclip in chat. The webapp uploads in 8 MiB chunks to `POST /api/meetings/:id/files` → `PUT .../chunk` → `POST .../complete`, so the app imposes **no total size limit** — only the server's free disk space matters. Uploads require a LiveKit token for the room; downloads use the unguessable `/api/files/<id>/<name>` link and are sent with `Content-Disposition: attachment`.
+
+Files live in `data/uploads` (override with `UPLOAD_DIR`) and are swept 24 hours after upload. On Render's free plan the filesystem is ephemeral, so uploads disappear on restart or redeploy and count against the instance disk; for durable large-file storage point `UPLOAD_DIR` at a persistent disk or swap in object storage.
+
+The file card is drawn by web clients. The Android app's chat does not render attachments yet.
+
+`node tests/file-upload.mjs` uploads a 20 MB file through multiple chunks and compares the SHA-256 of the download.
 
 The app is intentionally cleartext-friendly for LAN development (`usesCleartextTraffic="true"`). For a public deployment, serve everything over HTTPS/WSS and remove that flag.
 
@@ -124,6 +140,10 @@ The app is intentionally cleartext-friendly for LAN development (`usesCleartextT
 | GET | `/api/meetings/:id/requests` | host lists waiting guests (`x-host-key`) |
 | POST | `/api/meetings/:id/requests/:requestId` | host approves/denies (`x-host-key`) |
 | POST | `/api/meetings/:id/host-token` | host LiveKit token (`x-host-key`) |
+| POST | `/api/meetings/:id/files` | start a chat file upload (Bearer LiveKit token) |
+| PUT | `/api/meetings/:id/files/:fileId/chunk` | append a chunk (`x-file-offset`) |
+| POST | `/api/meetings/:id/files/:fileId/complete` | finalize upload → download URL |
+| GET | `/api/files/:fileId/:name` | download a shared file |
 
 Passcodes are stored bcrypt-hashed; LiveKit tokens expire after 6 hours and carry host/guest grants.
 
@@ -136,4 +156,4 @@ npx playwright install msedge   # once, if Edge is not detected
 node tests/e2e.mjs
 ```
 
-Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share the screen, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.
+Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.

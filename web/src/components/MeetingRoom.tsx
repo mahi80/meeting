@@ -18,11 +18,15 @@ import { isCameraEnabled, isMicEnabled } from '../lib/participants';
 import { useChat } from '../hooks/useChat';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useWaitingRoom } from '../hooks/useWaitingRoom';
+import { uploadSharedFile } from '../lib/upload';
 import { Stage, type AnnotationState } from './room/Stage';
 import { TopBar } from './room/TopBar';
 import { Toolbar } from './room/Toolbar';
 import { SidePanel } from './room/SidePanel';
 import { InviteDialog } from './room/InviteDialog';
+
+// Chrome/Edge can publish tab or system audio with a screen share; Safari/Firefox cannot.
+const canCaptureScreenAudio = /Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent);
 
 const roomOptions: RoomOptions = {
   adaptiveStream: true,
@@ -89,6 +93,7 @@ export function MeetingRoom({
         <RoomAudioRenderer />
         <RoomView
           meeting={meeting}
+          token={session.token}
           isHost={isHost}
           hostKey={hostKey}
           passcode={passcode}
@@ -103,6 +108,7 @@ export function MeetingRoom({
 
 function RoomView({
   meeting,
+  token,
   isHost,
   hostKey,
   passcode,
@@ -111,6 +117,7 @@ function RoomView({
   onLeave,
 }: {
   meeting: MeetingInfo;
+  token: string;
   isHost: boolean;
   hostKey: string;
   passcode: string;
@@ -130,6 +137,9 @@ function RoomView({
   const screenTrack =
     screenTracks.find((trackRef): trackRef is TrackReference => isTrackReference(trackRef)) ?? null;
   const sharing = screenTracks.some((trackRef) => trackRef.participant.isLocal);
+  const shareWithSound = useTracks([Track.Source.ScreenShareAudio], {
+    onlySubscribed: false,
+  }).some((trackRef) => isTrackReference(trackRef));
 
   const micOn = isMicEnabled(localParticipant);
   const camOn = isCameraEnabled(localParticipant);
@@ -195,7 +205,24 @@ function RoomView({
       return;
     }
     try {
-      await localParticipant.setScreenShareEnabled(!sharing);
+      if (sharing) {
+        await localParticipant.setScreenShareEnabled(false);
+        return;
+      }
+      if (canCaptureScreenAudio) {
+        showToast('In the picker, tick "Share system audio" (or "Share tab audio") to send computer sound');
+      }
+      await localParticipant.setScreenShareEnabled(
+        true,
+        canCaptureScreenAudio
+          ? {
+              audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+              systemAudio: 'include',
+              selfBrowserSurface: 'exclude',
+            }
+          : undefined,
+        canCaptureScreenAudio ? { audioPreset: AudioPresets.music } : undefined,
+      );
     } catch {
       showToast('Screen sharing was cancelled or is not permitted');
     }
@@ -210,6 +237,24 @@ function RoomView({
       }
     },
     [send, showToast],
+  );
+
+  const handleSendFile = useCallback(
+    async (file: File, caption: string, onProgress: (fraction: number) => void) => {
+      const shared = await uploadSharedFile({
+        meetingId: meeting.id,
+        token,
+        file,
+        onProgress,
+      });
+      await send(caption, {
+        url: shared.url,
+        name: shared.name,
+        size: shared.size,
+        type: shared.type,
+      });
+    },
+    [meeting.id, token, send],
   );
 
   const handleDecide = useCallback(
@@ -272,6 +317,7 @@ function RoomView({
           <Stage
             cameraTracks={cameraTracks}
             screenTrack={screenTrack}
+            shareWithSound={shareWithSound}
             annotations={annotationState}
             mode={mode}
             onStopSharing={() => void handleShare()}
@@ -294,6 +340,7 @@ function RoomView({
               onTab={setPanel}
               onClose={() => setPanel(null)}
               onSend={handleSend}
+              onSendFile={handleSendFile}
               onDecide={(requestId, action) => void handleDecide(requestId, action)}
               onInvite={() => setInviteOpen(true)}
               showToast={showToast}

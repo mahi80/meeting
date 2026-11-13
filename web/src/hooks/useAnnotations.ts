@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RoomEvent, type DataPacket_Kind, type RemoteParticipant } from 'livekit-client';
 import { useRoomContext } from '@livekit/components-react';
 
@@ -46,6 +46,8 @@ function appendPoints(
 export function useAnnotations() {
   const room = useRoomContext();
   const [strokes, setStrokes] = useState<Record<string, Stroke[]>>({});
+  const strokesRef = useRef(strokes);
+  strokesRef.current = strokes;
 
   useEffect(() => {
     const onData = (
@@ -104,16 +106,36 @@ export function useAnnotations() {
   }, [room]);
 
   const publish = useCallback(
-    (packet: Packet) => {
+    (packet: Packet, destinations?: string[]) => {
       void room.localParticipant
         .publishData(new TextEncoder().encode(JSON.stringify(packet)), {
           reliable: true,
           topic: TOPIC,
+          destinationIdentities: destinations,
         })
         .catch(() => undefined);
     },
     [room],
   );
+
+  // Send the current drawing to someone who joined (or reloaded) mid-share.
+  useEffect(() => {
+    const onJoin = (participant: RemoteParticipant) => {
+      for (const [target, list] of Object.entries(strokesRef.current)) {
+        for (const stroke of list) {
+          const { points, ...meta } = stroke;
+          publish({ t: 'b', s: meta }, [participant.identity]);
+          if (points.length > 0) {
+            publish({ t: 'p', target, id: stroke.id, pts: points }, [participant.identity]);
+          }
+        }
+      }
+    };
+    room.on(RoomEvent.ParticipantConnected, onJoin);
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, onJoin);
+    };
+  }, [room, publish]);
 
   const beginStroke = useCallback(
     (meta: StrokeMeta) => {
