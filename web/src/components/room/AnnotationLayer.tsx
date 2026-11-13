@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { useRoomContext } from '@livekit/components-react';
 import { Eraser, PenLine, Trash2, Undo2, X } from 'lucide-react';
 import type { Point, Stroke, StrokeMeta } from '../../hooks/useAnnotations';
+import { paintStrokes, roundPoint } from '../../lib/strokes';
 import { cn } from '../../lib/utils';
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'];
 const PEN_WIDTH = 4;
 const ERASER_WIDTH = 22;
-const REFERENCE_HEIGHT = 720;
 
 type Rect = { left: number; top: number; width: number; height: number };
 type Tool = 'pen' | 'eraser';
@@ -22,10 +22,6 @@ type Props = {
   onClear: (target: string) => void;
 };
 
-function round(value: number) {
-  return Math.round(value * 10_000) / 10_000;
-}
-
 function paint(
   canvas: HTMLCanvasElement,
   rect: Rect,
@@ -33,39 +29,7 @@ function paint(
   strokes: Stroke[],
   draft: Stroke | null,
 ) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, rect.width, rect.height);
-
-  const all = draft ? [...strokes, draft] : strokes;
-  for (const stroke of all) {
-    if (stroke.points.length === 0) continue;
-    const scale = rect.height / REFERENCE_HEIGHT;
-    ctx.globalCompositeOperation = stroke.erase ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = stroke.color;
-    ctx.fillStyle = stroke.color;
-    ctx.lineWidth = Math.max(1, stroke.width * scale);
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    const first = stroke.points[0];
-    if (stroke.points.length === 1) {
-      ctx.beginPath();
-      ctx.arc(first.x * rect.width, first.y * rect.height, ctx.lineWidth / 2, 0, Math.PI * 2);
-      ctx.fill();
-      continue;
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(first.x * rect.width, first.y * rect.height);
-    for (let i = 1; i < stroke.points.length; i += 1) {
-      const point = stroke.points[i];
-      ctx.lineTo(point.x * rect.width, point.y * rect.height);
-    }
-    ctx.stroke();
-  }
-  ctx.globalCompositeOperation = 'source-over';
+  paintStrokes(canvas, rect.width, rect.height, dpr, strokes, draft);
 }
 
 export function AnnotationLayer({
@@ -151,7 +115,7 @@ export function AnnotationLayer({
     if (!box.width || !box.height) return null;
     const x = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
     const y = Math.min(1, Math.max(0, (event.clientY - box.top) / box.height));
-    return { x: round(x), y: round(y) };
+    return { x: roundPoint(x), y: roundPoint(y) };
   };
 
   const flushPending = useCallback(() => {

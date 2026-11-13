@@ -181,6 +181,76 @@ try {
     console.log('  guest screen share not available in this headless run:', error.message.split('\n')[0]);
   }
 
+  step('whiteboard shared and drawn on');
+  let whiteboardShared = false;
+  let whiteboardLate = false;
+  let whiteboardInk = 0;
+  try {
+    await host.getByRole('button', { name: 'Whiteboard' }).click();
+    await host.getByText('You started the whiteboard').waitFor({ timeout: 10000 });
+    await guest.getByText(/started the whiteboard/).waitFor({ timeout: 10000 });
+    await guest.waitForTimeout(800);
+    const board = guest.locator('canvas[aria-label="Whiteboard canvas"]');
+    await board.waitFor({ timeout: 5000 });
+    const box = await board.boundingBox();
+    await guest.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.35);
+    await guest.mouse.down();
+    await guest.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.6, { steps: 10 });
+    await guest.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3, { steps: 10 });
+    await guest.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.55, { steps: 10 });
+    await guest.mouse.up();
+    await guest.waitForTimeout(1200);
+    whiteboardInk = await host.evaluate(() => {
+      const target = document.querySelector('canvas[aria-label="Whiteboard canvas"]');
+      if (!target) return 0;
+      const data = target.getContext('2d').getImageData(0, 0, target.width, target.height).data;
+      let count = 0;
+      for (let index = 3; index < data.length; index += 4) {
+        if (data[index] > 0) count += 1;
+      }
+      return count;
+    });
+    whiteboardShared = whiteboardInk > 100;
+    console.log('  whiteboard ink seen by host:', whiteboardInk);
+    await host.screenshot({ path: `${SHOTS}14a-host-whiteboard.png` });
+    await guest.screenshot({ path: `${SHOTS}14b-guest-whiteboard.png` });
+
+    step('whiteboard replayed to a late joiner');
+    const lateContext = await browser.newContext({
+      permissions: ['camera', 'microphone'],
+      viewport: { width: 1024, height: 700 },
+    });
+    const late = await lateContext.newPage();
+    await late.goto(guestUrl, { waitUntil: 'domcontentloaded' });
+    await late.waitForSelector('#join-name', { timeout: 20000 });
+    await late.fill('#join-name', 'Late Guest');
+    await late.getByRole('button', { name: 'Join meeting' }).click();
+    await host.locator('button[aria-label="People"]').click();
+    await host.getByRole('button', { name: 'Admit' }).click();
+    await late.getByRole('button', { name: 'Leave meeting' }).waitFor({ timeout: 20000 });
+    await late.getByText(/started the whiteboard/).waitFor({ timeout: 10000 });
+    await late.waitForTimeout(1500);
+    const lateInk = await late.evaluate(() => {
+      const target = document.querySelector('canvas[aria-label="Whiteboard canvas"]');
+      if (!target) return 0;
+      const data = target.getContext('2d').getImageData(0, 0, target.width, target.height).data;
+      let count = 0;
+      for (let index = 3; index < data.length; index += 4) {
+        if (data[index] > 0) count += 1;
+      }
+      return count;
+    });
+    console.log('  whiteboard ink replayed to late joiner:', lateInk);
+    whiteboardLate = lateInk > 100;
+    await late.screenshot({ path: `${SHOTS}14c-late-whiteboard.png` });
+    await lateContext.close();
+
+    await host.getByRole('button', { name: 'Close whiteboard' }).click();
+    await host.waitForTimeout(800);
+  } catch (error) {
+    console.log('  whiteboard not available in this headless run:', error.message.split('\n')[0]);
+  }
+
   step('speaker view toggle');
   await host.locator('button[aria-label="Meeting chat"]').click();
   await host.locator('button[aria-label="Participants and waiting room"]').click();
@@ -196,7 +266,7 @@ try {
   const annotationSynced = inkGuest > 100 && inkHost > 100;
   console.log(
     JSON.stringify(
-      { ok: true, shared, guestShared, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
+      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
       null,
       2,
     ),

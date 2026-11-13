@@ -5,6 +5,7 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  PenTool,
   PhoneOff,
   Users,
   Video,
@@ -17,12 +18,14 @@ type Props = {
   micOn: boolean;
   camOn: boolean;
   sharing: boolean;
+  whiteboardActive: boolean;
   panel: Panel | null;
   unread: number;
   waitingCount: number;
   onToggleMic: () => void;
   onToggleCam: () => void;
   onToggleShare: () => void;
+  onToggleWhiteboard: () => void;
   onOpenPanel: (panel: Panel) => void;
   onInvite: () => void;
   onLeave: () => void;
@@ -49,7 +52,7 @@ function Control({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="group flex w-14 shrink-0 flex-col items-center gap-1 sm:w-16"
+      className="group flex w-12 shrink-0 flex-col items-center gap-1 sm:w-16"
     >
       <span
         className={cn(
@@ -79,18 +82,20 @@ export function Toolbar({
   micOn,
   camOn,
   sharing,
+  whiteboardActive,
   panel,
   unread,
   waitingCount,
   onToggleMic,
   onToggleCam,
   onToggleShare,
+  onToggleWhiteboard,
   onOpenPanel,
   onInvite,
   onLeave,
 }: Props) {
   return (
-    <div className="flex shrink-0 items-center justify-center gap-0.5 border-t border-ink-800 bg-ink-900/95 px-2 py-2 backdrop-blur sm:gap-1">
+    <div className="scrollbar-slim flex shrink-0 items-center gap-0.5 overflow-x-auto border-t border-ink-800 bg-ink-900/95 px-2 py-2 backdrop-blur sm:justify-center sm:gap-1">
       <Control
         icon={micOn ? <Mic size={18} /> : <MicOff size={18} />}
         label={micOn ? 'Mute' : 'Unmute'}
@@ -111,6 +116,12 @@ export function Toolbar({
         label={sharing ? 'Stop share' : 'Share'}
         active={sharing}
         onClick={onToggleShare}
+      />
+      <Control
+        icon={<PenTool size={18} />}
+        label={whiteboardActive ? 'Stop whiteboard' : 'Whiteboard'}
+        active={whiteboardActive}
+        onClick={onToggleWhiteboard}
       />
       <Control
         icon={<MessageSquare size={18} />}
@@ -135,7 +146,7 @@ export function Toolbar({
         onClick={onLeave}
         title="Leave meeting"
         aria-label="Leave meeting"
-        className="group flex w-14 shrink-0 flex-col items-center gap-1 sm:w-16"
+        className="group flex w-12 shrink-0 flex-col items-center gap-1 sm:w-16"
       >
         <span className="grid h-11 w-11 place-items-center rounded-full bg-danger text-white transition hover:bg-red-600">
           <PhoneOff size={18} />

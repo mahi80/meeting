@@ -7,6 +7,7 @@ import { participantName } from '../../lib/participants';
 import { cn } from '../../lib/utils';
 import { AnnotationLayer } from './AnnotationLayer';
 import { VideoTile } from './VideoTile';
+import { Whiteboard } from './Whiteboard';
 
 export type AnnotationState = {
   target: string;
@@ -18,11 +19,24 @@ export type AnnotationState = {
   clearStrokes: (target: string) => void;
 };
 
+export type WhiteboardState = {
+  startedBy: string;
+  local: boolean;
+  strokes: Stroke[];
+  beginStroke: (meta: StrokeMeta) => void;
+  appendPoints: (target: string, id: string, points: Point[]) => void;
+  endStroke: (target: string, id: string) => void;
+  undoStroke: (target: string, id: string) => void;
+  clearStrokes: (target: string) => void;
+  onClose: () => void;
+};
+
 type Props = {
   cameraTracks: TrackReferenceOrPlaceholder[];
   screenTrack: TrackReference | null;
   shareWithSound: boolean;
   annotations: AnnotationState | null;
+  whiteboard: WhiteboardState | null;
   mode: ViewMode;
   onStopSharing: () => void;
 };
@@ -117,6 +131,7 @@ export function Stage({
   screenTrack,
   shareWithSound,
   annotations,
+  whiteboard,
   mode,
   onStopSharing,
 }: Props) {
@@ -130,6 +145,30 @@ export function Stage({
               withSound={shareWithSound}
               annotations={annotations}
               onStopSharing={onStopSharing}
+            />
+          </div>
+          <Filmstrip tracks={cameraTracks} vertical />
+        </div>
+        <Filmstrip tracks={cameraTracks} vertical={false} />
+      </div>
+    );
+  }
+
+  if (whiteboard) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1">
+          <div className="min-w-0 flex-1 p-2 sm:p-3">
+            <Whiteboard
+              startedBy={whiteboard.startedBy}
+              local={whiteboard.local}
+              strokes={whiteboard.strokes}
+              onBegin={whiteboard.beginStroke}
+              onAppend={whiteboard.appendPoints}
+              onEnd={whiteboard.endStroke}
+              onUndo={whiteboard.undoStroke}
+              onClear={whiteboard.clearStrokes}
+              onClose={whiteboard.onClose}
             />
           </div>
           <Filmstrip tracks={cameraTracks} vertical />

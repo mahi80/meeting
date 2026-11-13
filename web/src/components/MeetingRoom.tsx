@@ -18,8 +18,9 @@ import { isCameraEnabled, isMicEnabled } from '../lib/participants';
 import { useChat } from '../hooks/useChat';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useWaitingRoom } from '../hooks/useWaitingRoom';
+import { useWhiteboard } from '../hooks/useWhiteboard';
 import { uploadSharedFile } from '../lib/upload';
-import { Stage, type AnnotationState } from './room/Stage';
+import { Stage, type AnnotationState, type WhiteboardState } from './room/Stage';
 import { TopBar } from './room/TopBar';
 import { Toolbar } from './room/Toolbar';
 import { SidePanel } from './room/SidePanel';
@@ -146,6 +147,7 @@ function RoomView({
 
   const { messages, send } = useChat();
   const annotations = useAnnotations();
+  const whiteboard = useWhiteboard();
   const { requests, decide, offline } = useWaitingRoom(meeting.id, hostKey, isHost);
 
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -228,6 +230,24 @@ function RoomView({
     }
   }, [localParticipant, sharing, showToast]);
 
+  const closeWhiteboard = useCallback(() => {
+    annotations.clearStrokes('whiteboard');
+    whiteboard.close();
+  }, [annotations.clearStrokes, whiteboard.close]);
+
+  const handleWhiteboard = useCallback(() => {
+    if (whiteboard.active) {
+      closeWhiteboard();
+      return;
+    }
+    if (sharing) {
+      showToast('Stop the screen share before opening the whiteboard');
+      return;
+    }
+    annotations.clearStrokes('whiteboard');
+    whiteboard.open();
+  }, [whiteboard.active, whiteboard.open, closeWhiteboard, sharing, annotations.clearStrokes, showToast]);
+
   const handleSend = useCallback(
     async (text: string) => {
       try {
@@ -289,6 +309,20 @@ function RoomView({
       }
     : null;
 
+  const whiteboardState: WhiteboardState | null = whiteboard.active
+    ? {
+        startedBy: whiteboard.startedBy,
+        local: whiteboard.by === localParticipant.identity,
+        strokes: annotations.strokes.whiteboard ?? [],
+        beginStroke: annotations.beginStroke,
+        appendPoints: annotations.appendPoints,
+        endStroke: annotations.endStroke,
+        undoStroke: annotations.undoStroke,
+        clearStrokes: annotations.clearStrokes,
+        onClose: closeWhiteboard,
+      }
+    : null;
+
   return (
     <div className="flex h-full flex-col bg-room">
       <TopBar
@@ -319,6 +353,7 @@ function RoomView({
             screenTrack={screenTrack}
             shareWithSound={shareWithSound}
             annotations={annotationState}
+            whiteboard={whiteboardState}
             mode={mode}
             onStopSharing={() => void handleShare()}
           />
@@ -353,12 +388,14 @@ function RoomView({
         micOn={micOn}
         camOn={camOn}
         sharing={sharing}
+        whiteboardActive={whiteboard.active}
         panel={panel}
         unread={unread}
         waitingCount={isHost ? requests.length : 0}
         onToggleMic={handleMic}
         onToggleCam={handleCam}
         onToggleShare={() => void handleShare()}
+        onToggleWhiteboard={handleWhiteboard}
         onOpenPanel={openPanel}
         onInvite={() => setInviteOpen(true)}
         onLeave={handleLeave}

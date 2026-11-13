@@ -4,6 +4,7 @@ A Zoom-style meeting app with **video, screen sharing and chat**, built on [Live
 
 - **Web app** — React + Vite, Zoom-like dark room UI: gallery/speaker views, screen-share stage with filmstrip, chat, invite dialog, passcode + waiting room.
 - **Screen-share annotation** — anyone in the call can draw on the shared screen (pen, 5 colors, eraser, undo, clear); strokes sync to every participant over the LiveKit data channel, including people who join late.
+- **Whiteboard** — start a shared whiteboard from the toolbar; everyone in the call sees it and can draw at once (pen with 5 colors and 3 sizes, eraser, undo, clear). Strokes sync over the LiveKit data channel.
 - **Screen share with sound** — Chrome/Edge share computer/tab audio along with the screen (48 kbps Opus), shown as “with sound” on the share stage.
 - **File sharing in chat** — attach a file of any size; the web app uploads it to the meeting server in 8 MiB chunks (no total size cap) and posts a download card that everyone in the call can open.
 - **Weak-network audio** — microphone is published as mono speech (24 kbps, DTX + RED, AGC); camera and screen-share bitrates are capped so audio keeps priority on slow WiFi.
@@ -115,6 +116,14 @@ Annotations draw on top of the shared-screen stage for everyone in the call (web
 
 Annotations are drawn in the web app; the Android client shows the shared screen without the drawing overlay.
 
+### Whiteboard
+
+The **Whiteboard** button in the toolbar opens a shared board for the whole call. Any participant can start one, everyone sees the same canvas, and everyone can draw simultaneously. It reuses the annotation stroke protocol (`meet-annotate`, target `whiteboard`), so late joiners get the existing drawing and the board opens for them too. Closing the board clears it.
+
+Only one stage is shown at a time: stop a screen share before opening the whiteboard (the app asks you to). The whiteboard is web-only — Android participants do not render it, like screen-share annotations.
+
+The board is inspired by the standalone [whiteboard](https://github.com/mahi80/whiteboard) project, but instead of Excalidraw plus a second WebSocket server it reuses the meeting's LiveKit connection, so there is nothing extra to deploy.
+
 ### File sharing
 
 Attach files with the paperclip in chat. The webapp uploads in 8 MiB chunks to `POST /api/meetings/:id/files` → `PUT .../chunk` → `POST .../complete`, so the app imposes **no total size limit** — only the server's free disk space matters. Uploads require a LiveKit token for the room; downloads use the unguessable `/api/files/<id>/<name>` link and are sent with `Content-Disposition: attachment`.
@@ -156,4 +165,4 @@ npx playwright install msedge   # once, if Edge is not detected
 node tests/e2e.mjs
 ```
 
-Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.
+Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, draw on a shared whiteboard, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.
