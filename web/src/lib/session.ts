@@ -16,9 +16,12 @@ export function saveName(name: string) {
   }
 }
 
+// Host identity belongs to the tab that created the meeting. Shared storage
+// would let a guest link opened in another tab of the same browser hijack the
+// host identity and kick the real host out of the room.
 export function saveHostKey(meetingId: string, hostKey: string) {
   try {
-    localStorage.setItem(`meet:host:${meetingId}`, hostKey);
+    sessionStorage.setItem(`meet:host:${meetingId}`, hostKey);
   } catch {
     /* storage unavailable */
   }
@@ -26,7 +29,7 @@ export function saveHostKey(meetingId: string, hostKey: string) {
 
 export function loadHostKey(meetingId: string) {
   try {
-    return localStorage.getItem(`meet:host:${meetingId}`) ?? '';
+    return sessionStorage.getItem(`meet:host:${meetingId}`) ?? '';
   } catch {
     return '';
   }
