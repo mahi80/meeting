@@ -359,7 +359,7 @@ private fun ServerDialog(current: String, onDismiss: () -> Unit, onSave: (String
         text = {
             Column {
                 Text(
-                    "Use your PC's LAN address, for example http://192.168.1.20:8787. The Android emulator uses http://10.0.2.2:8787.",
+                    "Defaults to the hosted server. For local development use your PC's LAN address, e.g. http://192.168.1.20:8787 (emulator: http://10.0.2.2:8787).",
                     color = Mist300,
                     style = MaterialTheme.typography.bodySmall,
                 )

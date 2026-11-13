@@ -53,6 +53,8 @@ LIVEKIT_API_SECRET=your-secret
 
 ## Deploy on Render (free)
 
+Live deployment: **https://meeting-bmcz.onrender.com** (Render free web service + LiveKit Cloud in Frankfurt).
+
 LiveKit cannot be self-hosted on Render's free tier — media needs UDP/TCP ports Render does not expose. Use **LiveKit Cloud** (free tier) for media and Render only for the API + web app.
 
 1. Create a free project at https://cloud.livekit.io and copy its **WebSocket URL**, **API key** and **secret** (Settings → Keys).
@@ -88,6 +90,8 @@ LIVEKIT_NODE_IP=192.168.1.20
 ## Android app
 
 Open the `android/` folder in Android Studio, let Gradle sync, and run the `app` configuration. The Gradle wrapper is included (Gradle 8.9, AGP 8.7, Kotlin 2.0, Compose).
+
+The app defaults to the hosted server at `https://meeting-bmcz.onrender.com`; edit **Server** in the app (or `DEFAULT_SERVER_URL` in `android/app/build.gradle.kts`) to point at a local instance.
 
 Flow:
 

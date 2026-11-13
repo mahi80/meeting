@@ -15,7 +15,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:8787\"")
+        // Hosted on Render. Change in-app via Settings to use a local server instead.
+        buildConfigField("String", "DEFAULT_SERVER_URL", "\"https://meeting-bmcz.onrender.com\"")
     }
 
     buildTypes {
