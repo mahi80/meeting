@@ -51,6 +51,23 @@ LIVEKIT_API_SECRET=your-secret
 
 `PUBLIC_URL` is optional; set it when the app is behind a reverse proxy so invite links use the public hostname.
 
+## Deploy on Render (free)
+
+LiveKit cannot be self-hosted on Render's free tier — media needs UDP/TCP ports Render does not expose. Use **LiveKit Cloud** (free tier) for media and Render only for the API + web app.
+
+1. Create a free project at https://cloud.livekit.io and copy its **WebSocket URL**, **API key** and **secret** (Settings → Keys).
+2. In Render: **New → Blueprint**, select this repository, and apply. `render.yaml` defines one free Node web service.
+3. When prompted, paste `LIVEKIT_URL` (`wss://….livekit.cloud`), `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`.
+4. Wait for the build. Health check: `/api/health`. Open the `onrender.com` URL and create a meeting.
+
+Invite links are built from the incoming request host, so after deploying they automatically become `https://<service>.onrender.com/m/<id>#p=<passcode>`. Set `PUBLIC_URL` only if you add a custom domain or a proxy that rewrites the host.
+
+Render free notes:
+
+- The service sleeps after ~15 minutes without traffic; the first request afterwards takes ~30 seconds. Media stays on LiveKit Cloud, not Render.
+- SQLite uses the container's ephemeral disk, so meetings and pending join requests reset on restart or deploy. That is fine for ad-hoc rooms; meeting links are per-session anyway.
+- No Google sign-in is needed: the invite link + passcode is the access gate, and the host admits guests from the waiting room.
+
 ## Testing on a phone or the Android emulator
 
 The phone must reach both the API (`:8787`) and LiveKit (`:7880`, `:7881`, `:7882/udp`). Use your PC's LAN IP everywhere:
