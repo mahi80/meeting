@@ -10,7 +10,7 @@ import {
   useTracks,
   type TrackReference,
 } from '@livekit/components-react';
-import { AudioPresets, ConnectionState, Track, VideoPresets, type RoomOptions } from 'livekit-client';
+import { AudioPresets, ConnectionQuality, ConnectionState, RoomEvent, Track, VideoPresets, VideoQuality, type Participant, type RoomOptions } from 'livekit-client';
 import { AlertTriangle } from 'lucide-react';
 import type { MeetingInfo } from '../lib/api';
 import type { Panel, Session, ViewMode } from '../lib/roomTypes';
@@ -43,13 +43,16 @@ const roomOptions: RoomOptions = {
   },
   videoCaptureDefaults: { resolution: VideoPresets.h720.resolution },
   publishDefaults: {
-    audioPreset: AudioPresets.speech,
-    dtx: true,
+    // 32 kbps leaves Opus enough room to stay clean on lossy WiFi; still tiny.
+    audioPreset: { maxBitrate: 32_000 },
+    // DTX mutes packets during pauses, which can clip the first syllable of a
+    // sentence. Meetings would rather spend the ~3 kB/s than drop words.
+    dtx: false,
     red: true,
     forceStereo: false,
     simulcast: true,
     // Lower ceilings leave headroom for audio when the link is saturated.
-    videoEncoding: { maxBitrate: 1_200_000, maxFramerate: 24 },
+    videoEncoding: { maxBitrate: 900_000, maxFramerate: 24 },
     screenShareEncoding: { maxBitrate: 1_500_000, maxFramerate: 15 },
   },
 };
@@ -155,7 +158,16 @@ function RoomView({
   const [inviteOpen, setInviteOpen] = useState(created);
   const [unread, setUnread] = useState(0);
   const [toast, setToast] = useState('');
+  const [micPending, setMicPending] = useState(false);
+  const [camPending, setCamPending] = useState(false);
+  const micPendingRef = useRef(false);
+  const camPendingRef = useRef(false);
+  const sharingRef = useRef(sharing);
+  const poorRef = useRef(false);
+  const poorToastAt = useRef(0);
   const toastTimer = useRef<number | undefined>(undefined);
+
+  sharingRef.current = sharing;
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -193,13 +205,67 @@ function RoomView({
     setPanel((current) => (current === next ? null : next));
   }, []);
 
+  const setCameraPublishQuality = useCallback(
+    (low: boolean) => {
+      localParticipant
+        .getTrackPublication(Track.Source.Camera)
+        ?.videoTrack?.setPublishingQuality(low ? VideoQuality.LOW : VideoQuality.HIGH);
+    },
+    [localParticipant],
+  );
+
+  // Audio is the first thing to stutter when a weak uplink is saturated by
+  // video, so cap the camera to its low simulcast layer while it matters.
+  useEffect(() => {
+    const onQuality = (quality: ConnectionQuality, participant: Participant) => {
+      if (!participant.isLocal) return;
+      const poor = quality === ConnectionQuality.Poor || quality === ConnectionQuality.Lost;
+      if (poor === poorRef.current) return;
+      poorRef.current = poor;
+      if (poor) {
+        setCameraPublishQuality(true);
+        if (performance.now() - poorToastAt.current > 60_000) {
+          poorToastAt.current = performance.now();
+          showToast('Weak connection: lowering video quality to keep audio clear');
+        }
+      } else if (!sharingRef.current) {
+        setCameraPublishQuality(false);
+      }
+    };
+    room.on(RoomEvent.ConnectionQualityChanged, onQuality);
+    return () => {
+      room.off(RoomEvent.ConnectionQualityChanged, onQuality);
+    };
+  }, [room, setCameraPublishQuality, showToast]);
+
   const handleMic = useCallback(() => {
-    void localParticipant.setMicrophoneEnabled(!micOn).catch(() => showToast('Microphone is unavailable'));
+    if (micPendingRef.current) return;
+    micPendingRef.current = true;
+    setMicPending(true);
+    void localParticipant
+      .setMicrophoneEnabled(!micOn)
+      .catch(() => showToast('Microphone is unavailable'))
+      .finally(() => {
+        micPendingRef.current = false;
+        setMicPending(false);
+      });
   }, [localParticipant, micOn, showToast]);
 
   const handleCam = useCallback(() => {
-    void localParticipant.setCameraEnabled(!camOn).catch(() => showToast('Camera is unavailable'));
-  }, [localParticipant, camOn, showToast]);
+    if (camPendingRef.current) return;
+    camPendingRef.current = true;
+    setCamPending(true);
+    void localParticipant
+      .setCameraEnabled(!camOn)
+      .then(() => {
+        if (!camOn && (sharingRef.current || poorRef.current)) setCameraPublishQuality(true);
+      })
+      .catch(() => showToast('Camera is unavailable'))
+      .finally(() => {
+        camPendingRef.current = false;
+        setCamPending(false);
+      });
+  }, [localParticipant, camOn, showToast, setCameraPublishQuality]);
 
   const handleShare = useCallback(async () => {
     if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') {
@@ -209,6 +275,7 @@ function RoomView({
     try {
       if (sharing) {
         await localParticipant.setScreenShareEnabled(false);
+        setCameraPublishQuality(poorRef.current);
         return;
       }
       if (canCaptureScreenAudio) {
@@ -225,10 +292,11 @@ function RoomView({
           : undefined,
         canCaptureScreenAudio ? { audioPreset: AudioPresets.music } : undefined,
       );
+      setCameraPublishQuality(true);
     } catch {
       showToast('Screen sharing was cancelled or is not permitted');
     }
-  }, [localParticipant, sharing, showToast]);
+  }, [localParticipant, sharing, showToast, setCameraPublishQuality]);
 
   const closeWhiteboard = useCallback(() => {
     annotations.clearStrokes('whiteboard');
@@ -388,6 +456,8 @@ function RoomView({
       <Toolbar
         micOn={micOn}
         camOn={camOn}
+        micPending={micPending}
+        camPending={camPending}
         sharing={sharing}
         whiteboardActive={whiteboard.active}
         panel={panel}

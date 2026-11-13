@@ -17,6 +17,8 @@ import { cn } from '../../lib/utils';
 type Props = {
   micOn: boolean;
   camOn: boolean;
+  micPending: boolean;
+  camPending: boolean;
   sharing: boolean;
   whiteboardActive: boolean;
   panel: Panel | null;
@@ -37,6 +39,7 @@ function Control({
   onClick,
   active,
   danger,
+  busy,
   badge,
 }: {
   icon: ReactNode;
@@ -44,15 +47,18 @@ function Control({
   onClick: () => void;
   active?: boolean;
   danger?: boolean;
+  busy?: boolean;
   badge?: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={busy}
+      aria-busy={busy || undefined}
       title={label}
       aria-label={label}
-      className="group flex w-12 shrink-0 flex-col items-center gap-1 sm:w-16"
+      className="group flex w-12 shrink-0 touch-manipulation select-none flex-col items-center gap-1 disabled:opacity-60 sm:w-16"
     >
       <span
         className={cn(
@@ -81,6 +87,8 @@ function Control({
 export function Toolbar({
   micOn,
   camOn,
+  micPending,
+  camPending,
   sharing,
   whiteboardActive,
   panel,
@@ -100,12 +108,14 @@ export function Toolbar({
         icon={micOn ? <Mic size={18} /> : <MicOff size={18} />}
         label={micOn ? 'Mute' : 'Unmute'}
         danger={!micOn}
+        busy={micPending}
         onClick={onToggleMic}
       />
       <Control
         icon={camOn ? <Video size={18} /> : <VideoOff size={18} />}
         label={camOn ? 'Stop video' : 'Start video'}
         danger={!camOn}
+        busy={camPending}
         onClick={onToggleCam}
       />
 
@@ -146,7 +156,7 @@ export function Toolbar({
         onClick={onLeave}
         title="Leave meeting"
         aria-label="Leave meeting"
-        className="group flex w-12 shrink-0 flex-col items-center gap-1 sm:w-16"
+        className="group flex w-12 shrink-0 touch-manipulation select-none flex-col items-center gap-1 sm:w-16"
       >
         <span className="grid h-11 w-11 place-items-center rounded-full bg-danger text-white transition hover:bg-red-600">
           <PhoneOff size={18} />

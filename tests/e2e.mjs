@@ -187,6 +187,7 @@ try {
   let whiteboardResized = false;
   let whiteboardPanned = false;
   let whiteboardScrolled = false;
+  let cameraToggled = false;
   let whiteboardInk = 0;
   try {
     await host.getByRole('button', { name: 'Whiteboard' }).click();
@@ -353,6 +354,18 @@ try {
     console.log('  whiteboard not available in this headless run:', error.message.split('\n')[0]);
   }
 
+  step('host toggles camera off and back on');
+  try {
+    await host.getByRole('button', { name: 'Stop video' }).click();
+    await host.getByRole('button', { name: 'Start video' }).waitFor({ timeout: 10000 });
+    await host.screenshot({ path: `${SHOTS}14h-host-camera-off.png` });
+    await host.getByRole('button', { name: 'Start video' }).click();
+    await host.getByRole('button', { name: 'Stop video' }).waitFor({ timeout: 15000 });
+    cameraToggled = true;
+  } catch (error) {
+    console.log('  camera toggle not available in this headless run:', error.message.split('\n')[0]);
+  }
+
   step('speaker view toggle');
   await host.locator('button[aria-label="Meeting chat"]').click();
   await host.locator('button[aria-label="Participants and waiting room"]').click();
@@ -368,7 +381,7 @@ try {
   const annotationSynced = inkGuest > 100 && inkHost > 100;
   console.log(
     JSON.stringify(
-      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardResized, whiteboardPanned, whiteboardScrolled, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
+      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardResized, whiteboardPanned, whiteboardScrolled, cameraToggled, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
       null,
       2,
     ),

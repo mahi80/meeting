@@ -52,17 +52,25 @@ function columnsFor(count: number) {
 function Filmstrip({
   tracks,
   vertical,
+  narrow,
 }: {
   tracks: TrackReferenceOrPlaceholder[];
   vertical: boolean;
+  narrow?: boolean;
 }) {
   return (
     <div
       className={cn(
-        'scrollbar-slim shrink-0 gap-2',
+        'scrollbar-slim shrink-0',
         vertical
-          ? 'hidden w-44 flex-col overflow-y-auto border-l border-ink-800 p-2 md:flex'
-          : 'flex overflow-x-auto px-2 pb-2 md:hidden',
+          ? cn(
+              'hidden flex-col overflow-y-auto border-l border-ink-800 md:flex',
+              narrow ? 'w-28 gap-1.5 p-1.5' : 'w-44 gap-2 p-2',
+            )
+          : cn(
+              'flex overflow-x-auto md:hidden',
+              narrow ? 'gap-1.5 px-1.5 pb-1.5' : 'gap-2 px-2 pb-2',
+            ),
       )}
     >
       {tracks.map((trackRef) => (
@@ -70,7 +78,9 @@ function Filmstrip({
           key={trackRef.participant.identity}
           trackRef={trackRef}
           compact
-          className={vertical ? 'aspect-video w-full' : 'h-16 w-28 shrink-0'}
+          className={
+            vertical ? 'aspect-video w-full' : narrow ? 'h-12 w-20 shrink-0' : 'h-16 w-28 shrink-0'
+          }
         />
       ))}
     </div>
@@ -140,7 +150,7 @@ export function Stage({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1 p-2 sm:p-3">
+          <div className="min-w-0 flex-1 p-1 sm:p-2">
             <ScreenShareStage
               trackRef={screenTrack}
               withSound={shareWithSound}
@@ -148,9 +158,9 @@ export function Stage({
               onStopSharing={onStopSharing}
             />
           </div>
-          <Filmstrip tracks={cameraTracks} vertical />
+          <Filmstrip tracks={cameraTracks} vertical narrow />
         </div>
-        <Filmstrip tracks={cameraTracks} vertical={false} />
+        <Filmstrip tracks={cameraTracks} vertical={false} narrow />
       </div>
     );
   }

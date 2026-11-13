@@ -7,7 +7,8 @@ A Zoom-style meeting app with **video, screen sharing and chat**, built on [Live
 - **Whiteboard** — start a shared whiteboard from the toolbar; everyone in the call sees it and can draw at once on an endless pannable canvas (pen with 5 colors and 3 sizes, eraser, undo, clear, select-and-resize of drawn strokes, hand/wheel/space panning). Strokes sync over the LiveKit data channel.
 - **Screen share with sound** — Chrome/Edge share computer/tab audio along with the screen (48 kbps Opus), shown as “with sound” on the share stage.
 - **File sharing in chat** — attach a file of any size; the web app uploads it to the meeting server in 8 MiB chunks (no total size cap) and posts a download card that everyone in the call can open.
-- **Weak-network audio** — microphone is published as mono speech (24 kbps, DTX + RED, AGC); camera and screen-share bitrates are capped so audio keeps priority on slow WiFi.
+- **Weak-network audio** — microphone is published as mono speech (32 kbps, RED + AGC, DTX off so sentence starts are not clipped); while sharing, the camera drops to its low simulcast layer, and if LiveKit reports a poor local connection the app lowers camera quality automatically to keep voice flowing. Video bitrates are capped so audio keeps priority on slow WiFi.
+- **Compact share layout** — while someone shares a screen, participant cameras move to a narrow filmstrip so the shared screen gets nearly the full stage.
 - **Android app** — Kotlin + Jetpack Compose + LiveKit Android SDK: start a meeting, share the invite link over WhatsApp, admit guests, camera/mic, screen share, chat.
 - **Server** — issues LiveKit tokens, keeps passcodes and the waiting room in SQLite, serves the built web app.
 
@@ -112,6 +113,8 @@ Screen sharing from the **web app** requires a desktop browser: mobile browsers 
 
 When sharing from Chrome or Edge, the browser picker offers audio: tick **Share system audio** for an entire screen, or **Share tab audio** when sharing a tab; participants then hear the computer sound. What is offered depends on the OS and the chosen surface (Safari and Firefox cannot capture screen audio). If nobody can hear the shared sound, share a tab and tick its audio checkbox.
 
+While a share is active the stage switches to a compact layout: the shared screen takes almost the whole area and participant cameras collapse into a narrow filmstrip. If the connection is weak, the sharer's camera is automatically published at its lowest simulcast layer so the screen share and voice keep the available bandwidth. Voice is carried continuously (DTX off, redundant audio on); for the most reliable audio on a weak link, use headphones and, where possible, 5 GHz WiFi.
+
 Annotations draw on top of the shared-screen stage for everyone in the call (web clients). If someone still cannot see them, make sure they loaded the current build (hard refresh: `Ctrl+Shift+R`, or `Cmd+Shift+R` on macOS). With more than one person sharing at once, the app shows one share — if the ink was drawn on a different share, switch to that one.
 
 Annotations are drawn in the web app; the Android client shows the shared screen without the drawing overlay.
@@ -169,4 +172,4 @@ npx playwright install msedge   # once, if Edge is not detected
 node tests/e2e.mjs
 ```
 
-Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, draw on a shared whiteboard, resize and pan the drawing, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.
+Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, draw on a shared whiteboard, resize and pan the drawing, toggle the camera, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.
