@@ -18,6 +18,8 @@ export type Stroke = {
 
 export type StrokeMeta = Omit<Stroke, 'points'>;
 
+export type Box = { x: number; y: number; w: number; h: number };
+
 const TOPIC = 'meet-annotate';
 const MAX_STROKES = 400;
 
@@ -26,7 +28,45 @@ type Packet =
   | { t: 'p'; target: string; id: string; pts: Point[] }
   | { t: 'e'; target: string; id: string }
   | { t: 'u'; target: string; id: string }
+  | { t: 'x'; target: string; ids: string[]; from: Box; to: Box }
   | { t: 'c'; target: string };
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value));
+}
+
+export function transformStroke(stroke: Stroke, from: Box, to: Box): Stroke {
+  const sx = to.w / from.w;
+  const sy = to.h / from.h;
+  return {
+    ...stroke,
+    width: Math.max(1, Math.min(80, stroke.width * Math.abs(sy))),
+    points: stroke.points.map((point) => ({
+      x: clamp01(to.x + (point.x - from.x) * sx),
+      y: clamp01(to.y + (point.y - from.y) * sy),
+    })),
+  };
+}
+
+function transformList(list: Stroke[], ids: string[], from: Box, to: Box) {
+  if (from.w <= 0 || from.h <= 0 || to.w <= 0 || to.h <= 0) return list;
+  if (
+    from.x === to.x &&
+    from.y === to.y &&
+    from.w === to.w &&
+    from.h === to.h
+  ) {
+    return list;
+  }
+  const selected = new Set(ids);
+  let changed = false;
+  const next = list.map((stroke) => {
+    if (!selected.has(stroke.id)) return stroke;
+    changed = true;
+    return transformStroke(stroke, from, to);
+  });
+  return changed ? next : list;
+}
 
 function appendPoints(
   current: Record<string, Stroke[]>,
@@ -87,6 +127,17 @@ export function useAnnotations() {
           const list = current[packet.target];
           if (!list) return current;
           return { ...current, [packet.target]: list.filter((stroke) => stroke.id !== packet.id) };
+        });
+        return;
+      }
+
+      if (packet.t === 'x') {
+        if (!packet.target || !Array.isArray(packet.ids) || !packet.from || !packet.to) return;
+        setStrokes((current) => {
+          const list = current[packet.target];
+          if (!list) return current;
+          const next = transformList(list, packet.ids, packet.from, packet.to);
+          return next === list ? current : { ...current, [packet.target]: next };
         });
         return;
       }
@@ -188,5 +239,27 @@ export function useAnnotations() {
     [publish],
   );
 
-  return { strokes, beginStroke, appendPoints: appendPointsTo, endStroke, undoStroke, clearStrokes };
+  const transformStrokes = useCallback(
+    (target: string, ids: string[], from: Box, to: Box) => {
+      if (ids.length === 0) return;
+      setStrokes((current) => {
+        const list = current[target];
+        if (!list) return current;
+        const next = transformList(list, ids, from, to);
+        return next === list ? current : { ...current, [target]: next };
+      });
+      publish({ t: 'x', target, ids, from, to });
+    },
+    [publish],
+  );
+
+  return {
+    strokes,
+    beginStroke,
+    appendPoints: appendPointsTo,
+    endStroke,
+    undoStroke,
+    clearStrokes,
+    transformStrokes,
+  };
 }

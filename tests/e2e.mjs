@@ -184,6 +184,7 @@ try {
   step('whiteboard shared and drawn on');
   let whiteboardShared = false;
   let whiteboardLate = false;
+  let whiteboardResized = false;
   let whiteboardInk = 0;
   try {
     await host.getByRole('button', { name: 'Whiteboard' }).click();
@@ -214,6 +215,73 @@ try {
     console.log('  whiteboard ink seen by host:', whiteboardInk);
     await host.screenshot({ path: `${SHOTS}14a-host-whiteboard.png` });
     await guest.screenshot({ path: `${SHOTS}14b-guest-whiteboard.png` });
+
+    step('guest selects and resizes whiteboard strokes');
+    const inkBox = () => {
+      const target = document.querySelector('canvas[aria-label="Whiteboard canvas"]');
+      if (!target) return null;
+      const data = target.getContext('2d').getImageData(0, 0, target.width, target.height).data;
+      let minX = target.width;
+      let minY = target.height;
+      let maxX = -1;
+      let maxY = -1;
+      for (let y = 0; y < target.height; y += 2) {
+        for (let x = 0; x < target.width; x += 2) {
+          if (data[(y * target.width + x) * 4 + 3] > 0) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX < 0) return null;
+      return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+    };
+    const beforeBox = await host.evaluate(inkBox);
+    await guest.getByRole('button', { name: 'Select and resize' }).click();
+    await guest.mouse.move(box.x + box.width * 0.15, box.y + box.height * 0.2);
+    await guest.mouse.down();
+    await guest.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.8, { steps: 12 });
+    await guest.mouse.up();
+    const handle = guest.getByRole('button', { name: 'Resize bottom right' });
+    await handle.waitFor({ timeout: 5000 });
+    await guest.screenshot({ path: `${SHOTS}14d-guest-whiteboard-selected.png` });
+    const grip = await handle.boundingBox();
+    await guest.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await guest.mouse.down();
+    await guest.mouse.move(grip.x + grip.width / 2 + box.width * 0.18, grip.y + grip.height / 2 + box.height * 0.18, { steps: 15 });
+    await guest.mouse.up();
+    await host
+      .waitForFunction(
+        (previousWidth) => {
+          const target = document.querySelector('canvas[aria-label="Whiteboard canvas"]');
+          if (!target || !previousWidth) return false;
+          const data = target.getContext('2d').getImageData(0, 0, target.width, target.height).data;
+          let minX = target.width;
+          let maxX = -1;
+          for (let y = 0; y < target.height; y += 2) {
+            for (let x = 0; x < target.width; x += 2) {
+              if (data[(y * target.width + x) * 4 + 3] > 0) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+              }
+            }
+          }
+          return maxX >= 0 && maxX - minX + 1 > previousWidth * 1.1;
+        },
+        beforeBox?.w ?? 0,
+        { timeout: 8000 },
+      )
+      .catch(() => undefined);
+    const afterBox = await host.evaluate(inkBox);
+    whiteboardResized = Boolean(
+      beforeBox && afterBox && afterBox.w > beforeBox.w * 1.1 && afterBox.h > beforeBox.h * 1.1,
+    );
+    console.log('  whiteboard ink box host before/after resize:', beforeBox, afterBox);
+    await host.screenshot({ path: `${SHOTS}14e-host-whiteboard-resized.png` });
+    await guest.screenshot({ path: `${SHOTS}14f-guest-whiteboard-resized.png` });
+    await guest.getByRole('button', { name: 'Select and resize' }).click();
 
     step('whiteboard replayed to a late joiner');
     const lateContext = await browser.newContext({
@@ -266,7 +334,7 @@ try {
   const annotationSynced = inkGuest > 100 && inkHost > 100;
   console.log(
     JSON.stringify(
-      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
+      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardResized, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
       null,
       2,
     ),

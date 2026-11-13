@@ -1,7 +1,7 @@
 import type { TrackReference, TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import { VideoTrack } from '@livekit/components-react';
 import { MonitorUp } from 'lucide-react';
-import type { Point, Stroke, StrokeMeta } from '../../hooks/useAnnotations';
+import type { Box, Point, Stroke, StrokeMeta } from '../../hooks/useAnnotations';
 import type { ViewMode } from '../../lib/roomTypes';
 import { participantName } from '../../lib/participants';
 import { cn } from '../../lib/utils';
@@ -28,6 +28,7 @@ export type WhiteboardState = {
   endStroke: (target: string, id: string) => void;
   undoStroke: (target: string, id: string) => void;
   clearStrokes: (target: string) => void;
+  transformStrokes: (target: string, ids: string[], from: Box, to: Box) => void;
   onClose: () => void;
 };
 
@@ -168,6 +169,7 @@ export function Stage({
               onEnd={whiteboard.endStroke}
               onUndo={whiteboard.undoStroke}
               onClear={whiteboard.clearStrokes}
+              onTransform={whiteboard.transformStrokes}
               onClose={whiteboard.onClose}
             />
           </div>

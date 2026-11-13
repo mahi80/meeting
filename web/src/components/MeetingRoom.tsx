@@ -319,6 +319,7 @@ function RoomView({
         endStroke: annotations.endStroke,
         undoStroke: annotations.undoStroke,
         clearStrokes: annotations.clearStrokes,
+        transformStrokes: annotations.transformStrokes,
         onClose: closeWhiteboard,
       }
     : null;
