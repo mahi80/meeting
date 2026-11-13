@@ -1,0 +1,12 @@
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: meeting-livekit
+    # --node-ip makes ICE candidates reachable from a browser on the same machine.
+    # For a phone or emulator, set LIVEKIT_NODE_IP to your PC's LAN IP.
+    command: --dev --bind 0.0.0.0 --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    restart: unless-stopped

@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #090b0e;
+  --color-ink-900: #0f1217;
+  --color-ink-850: #131820;
+  --color-ink-800: #1a2029;
+  --color-ink-700: #232b36;
+  --color-ink-600: #2f3947;
+  --color-mist-100: #eaedf2;
+  --color-mist-200: #d4dae2;
+  --color-mist-300: #b3bcc8;
+  --color-mist-400: #8d98a7;
+  --color-mist-500: #6a7583;
+  --color-mist-600: #535d69;
+  --color-zoom: #2d8cff;
+  --color-zoom-dark: #1f6fd8;
+  --color-danger: #e5484d;
+  --color-ok: #2fbf71;
+  --color-wa: #25d366;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 text-mist-100 antialiased;
+    font-family:
+      "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-zoom) 45%, transparent);
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  input,
+  textarea {
+    outline: none;
+  }
+}
+
+@layer utilities {
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: #39434f transparent;
+  }
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background: #39434f;
+    border-radius: 99px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .bg-room {
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(45, 140, 255, 0.08), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(47, 191, 113, 0.05), transparent 55%),
+      #090b0e;
+  }
+
+  .animate-rise {
+    animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .animate-fade {
+    animation: fade 0.25s ease both;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
