@@ -185,6 +185,8 @@ try {
   let whiteboardShared = false;
   let whiteboardLate = false;
   let whiteboardResized = false;
+  let whiteboardPanned = false;
+  let whiteboardScrolled = false;
   let whiteboardInk = 0;
   try {
     await host.getByRole('button', { name: 'Whiteboard' }).click();
@@ -283,6 +285,38 @@ try {
     await guest.screenshot({ path: `${SHOTS}14f-guest-whiteboard-resized.png` });
     await guest.getByRole('button', { name: 'Select and resize' }).click();
 
+    step('guest pans and scrolls the endless whiteboard');
+    const dpr = await guest.evaluate(() => window.devicePixelRatio || 1);
+    const beforePan = await guest.evaluate(inkBox);
+    const centerX = box.x + box.width * 0.5;
+    const centerY = box.y + box.height * 0.5;
+    await guest.getByRole('button', { name: 'Pan canvas' }).click();
+    await guest.mouse.move(centerX, centerY);
+    await guest.mouse.down();
+    await guest.mouse.move(centerX - 140, centerY - 90, { steps: 12 });
+    await guest.mouse.up();
+    await guest.waitForTimeout(400);
+    const afterPan = await guest.evaluate(inkBox);
+    whiteboardPanned = Boolean(
+      beforePan &&
+        afterPan &&
+        Math.abs(afterPan.x - beforePan.x + 140 * dpr) < 40 * dpr &&
+        Math.abs(afterPan.y - beforePan.y + 90 * dpr) < 40 * dpr,
+    );
+    console.log('  ink box guest before/after pan:', beforePan, afterPan);
+    await guest.screenshot({ path: `${SHOTS}14g-guest-whiteboard-panned.png` });
+
+    const beforeScroll = await guest.evaluate(inkBox);
+    await guest.mouse.move(centerX, centerY);
+    await guest.mouse.wheel(0, -90);
+    await guest.waitForTimeout(400);
+    const afterScroll = await guest.evaluate(inkBox);
+    whiteboardScrolled = Boolean(
+      beforeScroll && afterScroll && afterScroll.y > beforeScroll.y + 50 * dpr,
+    );
+    console.log('  ink box guest before/after wheel scroll:', beforeScroll, afterScroll);
+    await guest.getByRole('button', { name: 'Pan canvas' }).click();
+
     step('whiteboard replayed to a late joiner');
     const lateContext = await browser.newContext({
       permissions: ['camera', 'microphone'],
@@ -334,7 +368,7 @@ try {
   const annotationSynced = inkGuest > 100 && inkHost > 100;
   console.log(
     JSON.stringify(
-      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardResized, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
+      { ok: true, shared, guestShared, whiteboardShared, whiteboardLate, whiteboardResized, whiteboardPanned, whiteboardScrolled, whiteboardInk, fileShared, annotationSynced, inkGuest, inkHost, hostVideos, guestVideos, errors },
       null,
       2,
     ),

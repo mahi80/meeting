@@ -35,15 +35,18 @@ function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
 }
 
+// Annotation strokes are normalized to the shared video (0..1); whiteboard
+// strokes use absolute world coordinates, so transforms must not clamp them.
 export function transformStroke(stroke: Stroke, from: Box, to: Box): Stroke {
   const sx = to.w / from.w;
   const sy = to.h / from.h;
+  const clamp = stroke.target === 'whiteboard' ? (value: number) => value : clamp01;
   return {
     ...stroke,
     width: Math.max(1, Math.min(80, stroke.width * Math.abs(sy))),
     points: stroke.points.map((point) => ({
-      x: clamp01(to.x + (point.x - from.x) * sx),
-      y: clamp01(to.y + (point.y - from.y) * sy),
+      x: clamp(to.x + (point.x - from.x) * sx),
+      y: clamp(to.y + (point.y - from.y) * sy),
     })),
   };
 }

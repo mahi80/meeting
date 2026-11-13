@@ -7,18 +7,19 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useRoomContext } from '@livekit/components-react';
-import { Eraser, MousePointer2, PenLine, Trash2, Undo2 } from 'lucide-react';
+import { Eraser, Hand, MousePointer2, PenLine, Trash2, Undo2 } from 'lucide-react';
 import type { Box, Point, Stroke, StrokeMeta } from '../../hooks/useAnnotations';
 import { transformStroke } from '../../hooks/useAnnotations';
-import { paintStrokes, roundPoint } from '../../lib/strokes';
+import { paintWorldStrokes, roundPoint } from '../../lib/strokes';
 import { cn } from '../../lib/utils';
 
 const COLORS = ['#0f172a', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6'];
 const SIZES = [2, 4, 8];
 const ERASER_WIDTH = 24;
-const MIN_BOX = 0.015;
+const MIN_BOX = 8;
+const GRID = 24;
 
-type Tool = 'pen' | 'eraser' | 'select';
+type Tool = 'pen' | 'eraser' | 'select' | 'pan';
 type Handle = 'nw' | 'ne' | 'sw' | 'se';
 
 const HANDLES: Array<{ key: Handle; label: string; style: Record<string, string> }> = [
@@ -43,10 +44,10 @@ type Props = {
 
 function boundsOf(strokes: Stroke[], ids: string[]): Box | null {
   const selected = new Set(ids);
-  let minX = 1;
-  let minY = 1;
-  let maxX = 0;
-  let maxY = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
   let found = false;
   for (const stroke of strokes) {
     if (!selected.has(stroke.id)) continue;
@@ -74,6 +75,15 @@ function boundsOf(strokes: Stroke[], ids: string[]): Box | null {
   return { x, y, w, h };
 }
 
+function keyboardTarget(target: EventTarget | null) {
+  const element = target as HTMLElement | null;
+  if (!element) return false;
+  return (
+    element.isContentEditable ||
+    ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(element.tagName)
+  );
+}
+
 export function Whiteboard({
   startedBy,
   local,
@@ -93,8 +103,12 @@ export function Whiteboard({
   const draftRef = useRef<Stroke | null>(null);
   const pendingRef = useRef<{ id: string; points: Point[]; sentAt: number } | null>(null);
   const marqueeStartRef = useRef<Point | null>(null);
+  const panRef = useRef<{ startX: number; startY: number; view: Point } | null>(null);
+  const spaceRef = useRef(false);
   const dprRef = useRef(1);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [view, setView] = useState<Point>({ x: 0, y: 0 });
+  const [spaceDown, setSpaceDown] = useState(false);
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(SIZES[1]);
@@ -118,8 +132,8 @@ export function Whiteboard({
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !size.width || !size.height) return;
-    paintStrokes(canvas, size.width, size.height, dprRef.current, displayStrokes, draftRef.current);
-  }, [size, displayStrokes]);
+    paintWorldStrokes(canvas, dprRef.current, displayStrokes, draftRef.current, view);
+  }, [size, displayStrokes, view]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -152,20 +166,62 @@ export function Whiteboard({
   }, [draw, displayStrokes]);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1;
+      setView((current) => ({
+        x: current.x + event.deltaX * unit,
+        y: current.y + event.deltaY * unit,
+      }));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, []);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || keyboardTarget(event.target) || spaceRef.current) return;
+      event.preventDefault();
+      spaceRef.current = true;
+      setSpaceDown(true);
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+      spaceRef.current = false;
+      setSpaceDown(false);
+    };
+    const blur = () => {
+      spaceRef.current = false;
+      setSpaceDown(false);
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selection) return;
     const ids = new Set(strokes.map((stroke) => stroke.id));
     const kept = selection.filter((id) => ids.has(id));
     if (kept.length !== selection.length) setSelection(kept.length ? kept : null);
   }, [strokes, selection]);
 
-  const toPoint = (event: ReactPointerEvent<HTMLElement>): Point | null => {
+  const toWorld = (event: { clientX: number; clientY: number }): Point | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const box = canvas.getBoundingClientRect();
     if (!box.width || !box.height) return null;
-    const x = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
-    const y = Math.min(1, Math.max(0, (event.clientY - box.top) / box.height));
-    return { x: roundPoint(x), y: roundPoint(y) };
+    return {
+      x: roundPoint(event.clientX - box.left + view.x),
+      y: roundPoint(event.clientY - box.top + view.y),
+    };
   };
 
   const flushPending = useCallback(() => {
@@ -189,7 +245,13 @@ export function Whiteboard({
     if (!size.width || !size.height) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const point = toPoint(event);
+
+    if (tool === 'pan' || event.button === 1 || spaceRef.current) {
+      panRef.current = { startX: event.clientX, startY: event.clientY, view };
+      return;
+    }
+
+    const point = toWorld(event);
     if (!point) return;
 
     if (tool === 'select') {
@@ -215,10 +277,19 @@ export function Whiteboard({
   };
 
   const handleMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const pan = panRef.current;
+    if (pan) {
+      setView({
+        x: pan.view.x - (event.clientX - pan.startX),
+        y: pan.view.y - (event.clientY - pan.startY),
+      });
+      return;
+    }
+
     if (tool === 'select') {
       const start = marqueeStartRef.current;
       if (!start) return;
-      const point = toPoint(event);
+      const point = toWorld(event);
       if (!point) return;
       setMarquee({
         x: Math.min(start.x, point.x),
@@ -231,10 +302,10 @@ export function Whiteboard({
 
     const draft = draftRef.current;
     if (!draft) return;
-    const point = toPoint(event);
+    const point = toWorld(event);
     if (!point) return;
     const last = draft.points[draft.points.length - 1];
-    if (last && Math.abs(last.x - point.x) < 0.0008 && Math.abs(last.y - point.y) < 0.0008) {
+    if (last && Math.abs(last.x - point.x) < 0.5 && Math.abs(last.y - point.y) < 0.5) {
       return;
     }
     draft.points.push(point);
@@ -250,11 +321,16 @@ export function Whiteboard({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
+    if (panRef.current) {
+      panRef.current = null;
+      return;
+    }
+
     if (tool === 'select') {
       const start = marqueeStartRef.current;
       marqueeStartRef.current = null;
       setMarquee(null);
-      const end = toPoint(event);
+      const end = toWorld(event);
       if (!start || !end) return;
       const area = {
         x: Math.min(start.x, end.x),
@@ -262,7 +338,7 @@ export function Whiteboard({
         w: Math.abs(end.x - start.x),
         h: Math.abs(end.y - start.y),
       };
-      if (area.w < 0.01 || area.h < 0.01) {
+      if (area.w < 6 || area.h < 6) {
         setSelection(null);
         return;
       }
@@ -301,15 +377,15 @@ export function Whiteboard({
 
   const dragResize = (handle: Handle) => (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!resize) return;
-    const point = toPoint(event);
+    const point = toWorld(event);
     if (!point) return;
     const from = resize.from;
     const anchorX = handle === 'nw' || handle === 'sw' ? from.x + from.w : from.x;
     const anchorY = handle === 'nw' || handle === 'ne' ? from.y + from.h : from.y;
     const x = Math.min(anchorX, point.x);
     const y = Math.min(anchorY, point.y);
-    const w = Math.max(0.01, Math.abs(point.x - anchorX));
-    const h = Math.max(0.01, Math.abs(point.y - anchorY));
+    const w = Math.max(8, Math.abs(point.x - anchorX));
+    const h = Math.max(8, Math.abs(point.y - anchorY));
     setResize({ ids: resize.ids, from, to: { x, y, w, h } });
   };
 
@@ -327,6 +403,10 @@ export function Whiteboard({
 
   const lastStroke = strokes.length > 0 ? strokes[strokes.length - 1] : null;
   const shownBox = resize ? resize.to : selectionBounds;
+  const screenBox = shownBox
+    ? { x: shownBox.x - view.x, y: shownBox.y - view.y, w: shownBox.w, h: shownBox.h }
+    : null;
+  const panMode = tool === 'pan' || spaceDown;
 
   return (
     <div
@@ -334,7 +414,8 @@ export function Whiteboard({
       className="relative h-full w-full overflow-hidden rounded-xl border-2 border-ink-600 bg-white shadow-2xl shadow-black/40"
       style={{
         backgroundImage: 'radial-gradient(#dbe3ee 1px, transparent 1px)',
-        backgroundSize: '24px 24px',
+        backgroundSize: `${GRID}px ${GRID}px`,
+        backgroundPosition: `${-view.x}px ${-view.y}px`,
       }}
     >
       <canvas
@@ -344,9 +425,14 @@ export function Whiteboard({
         onPointerMove={handleMove}
         onPointerUp={finish}
         onPointerCancel={finish}
+        onAuxClick={(event) => event.preventDefault()}
         className={cn(
           'absolute inset-0 h-full w-full',
-          tool === 'select' ? 'cursor-default' : 'cursor-crosshair',
+          panMode
+            ? 'cursor-grab active:cursor-grabbing'
+            : tool === 'select'
+              ? 'cursor-default'
+              : 'cursor-crosshair',
         )}
         style={{ touchAction: 'none' }}
       />
@@ -355,22 +441,22 @@ export function Whiteboard({
         <div
           className="pointer-events-none absolute z-10 border border-zoom/80 bg-zoom/10"
           style={{
-            left: `${marquee.x * 100}%`,
-            top: `${marquee.y * 100}%`,
-            width: `${marquee.w * 100}%`,
-            height: `${marquee.h * 100}%`,
+            left: marquee.x - view.x,
+            top: marquee.y - view.y,
+            width: marquee.w,
+            height: marquee.h,
           }}
         />
       )}
 
-      {tool === 'select' && shownBox && (
+      {tool === 'select' && screenBox && (
         <div
           className="pointer-events-none absolute z-10"
           style={{
-            left: `${shownBox.x * 100}%`,
-            top: `${shownBox.y * 100}%`,
-            width: `${shownBox.w * 100}%`,
-            height: `${shownBox.h * 100}%`,
+            left: screenBox.x,
+            top: screenBox.y,
+            width: screenBox.w,
+            height: screenBox.h,
           }}
         >
           <div className="absolute inset-0 rounded border border-dashed border-zoom/80" />
@@ -406,6 +492,20 @@ export function Whiteboard({
       </div>
 
       <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-lg border border-white/10 bg-black/75 p-1 backdrop-blur">
+        <button
+          type="button"
+          onClick={() => chooseTool(tool === 'pan' ? 'pen' : 'pan')}
+          title="Pan canvas (drag, wheel, or hold Space)"
+          aria-label="Pan canvas"
+          className={cn(
+            'grid h-7 w-7 place-items-center rounded-md transition',
+            tool === 'pan'
+              ? 'bg-zoom/25 text-zoom'
+              : 'text-mist-200 hover:bg-white/10 hover:text-white',
+          )}
+        >
+          <Hand size={14} />
+        </button>
         <button
           type="button"
           onClick={() => chooseTool(tool === 'select' ? 'pen' : 'select')}

@@ -4,7 +4,7 @@ A Zoom-style meeting app with **video, screen sharing and chat**, built on [Live
 
 - **Web app** — React + Vite, Zoom-like dark room UI: gallery/speaker views, screen-share stage with filmstrip, chat, invite dialog, passcode + waiting room.
 - **Screen-share annotation** — anyone in the call can draw on the shared screen (pen, 5 colors, eraser, undo, clear); strokes sync to every participant over the LiveKit data channel, including people who join late.
-- **Whiteboard** — start a shared whiteboard from the toolbar; everyone in the call sees it and can draw at once (pen with 5 colors and 3 sizes, eraser, undo, clear, plus select-and-resize of drawn strokes). Strokes sync over the LiveKit data channel.
+- **Whiteboard** — start a shared whiteboard from the toolbar; everyone in the call sees it and can draw at once on an endless pannable canvas (pen with 5 colors and 3 sizes, eraser, undo, clear, select-and-resize of drawn strokes, hand/wheel/space panning). Strokes sync over the LiveKit data channel.
 - **Screen share with sound** — Chrome/Edge share computer/tab audio along with the screen (48 kbps Opus), shown as “with sound” on the share stage.
 - **File sharing in chat** — attach a file of any size; the web app uploads it to the meeting server in 8 MiB chunks (no total size cap) and posts a download card that everyone in the call can open.
 - **Weak-network audio** — microphone is published as mono speech (24 kbps, DTX + RED, AGC); camera and screen-share bitrates are capped so audio keeps priority on slow WiFi.
@@ -120,7 +120,9 @@ Annotations are drawn in the web app; the Android client shows the shared screen
 
 The **Whiteboard** button in the toolbar opens a shared board for the whole call. Any participant can start one, everyone sees the same canvas, and everyone can draw simultaneously. It reuses the annotation stroke protocol (`meet-annotate`, target `whiteboard`), so late joiners get the existing drawing and the board opens for them too. Closing the board clears it.
 
-The **Select and resize** tool (arrow at the left of the board toolbar) lets you drag a rectangle around strokes, then drag any of the four corner handles to scale that selection. The result is broadcast as one `x` packet and applies to everyone, including participants who join later.
+The **Select and resize** tool (arrow next to the hand) lets you drag a rectangle around strokes, then drag any of the four corner handles to scale that selection. The result is broadcast as one `x` packet and applies to everyone, including participants who join later.
+
+The board is an endless canvas. Pan it with the **Pan canvas** hand tool, with the mouse wheel (or trackpad), with a middle-mouse drag, or by holding **Space** and dragging with any tool active. The view is personal: panning only moves your own screen, while strokes stay at the same world position for everyone.
 
 Only one stage is shown at a time: stop a screen share before opening the whiteboard (the app asks you to). The whiteboard is web-only — Android participants do not render it, like screen-share annotations.
 
@@ -167,4 +169,4 @@ npx playwright install msedge   # once, if Edge is not detected
 node tests/e2e.mjs
 ```
 
-Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, draw on a shared whiteboard, resize the drawing, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.
+Two isolated Edge contexts create a meeting, join through the waiting room, chat both ways, share a file, share the screen, annotate, draw on a shared whiteboard, resize and pan the drawing, switch to speaker view, and leave. Screenshots land in `tests/screenshots/`.

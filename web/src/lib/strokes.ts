@@ -48,3 +48,47 @@ export function paintStrokes(
 export function roundPoint(value: number) {
   return Math.round(value * 10_000) / 10_000;
 }
+
+/** Draws strokes whose points are absolute coordinates in an unbounded world. */
+export function paintWorldStrokes(
+  canvas: HTMLCanvasElement,
+  dpr: number,
+  strokes: Stroke[],
+  draft: Stroke | null,
+  view: { x: number; y: number },
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const width = canvas.width / dpr;
+  const height = canvas.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const all = draft ? [...strokes, draft] : strokes;
+  for (const stroke of all) {
+    if (stroke.points.length === 0) continue;
+    ctx.globalCompositeOperation = stroke.erase ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = stroke.color;
+    ctx.fillStyle = stroke.color;
+    ctx.lineWidth = Math.max(1, stroke.width);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    const first = stroke.points[0];
+    if (stroke.points.length === 1) {
+      ctx.beginPath();
+      ctx.arc(first.x - view.x, first.y - view.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(first.x - view.x, first.y - view.y);
+    for (let i = 1; i < stroke.points.length; i += 1) {
+      const point = stroke.points[i];
+      ctx.lineTo(point.x - view.x, point.y - view.y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
